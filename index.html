@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>E.V. // STARK-TECH DAILY HUD</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Marked.js for Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- PDF.js for in-browser archive extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: '#060911',
+            hudpanel: '#0b101d',
+            crimson: '#ff2a4b',
+            cyan: '#00f0ff',
+            amber: '#ffb800',
+          },
+          fontFamily: {
+            display: ['Orbitron', 'sans-serif'],
+            sans: ['Rajdhani', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --crimson: #ff2a4b;
+      --cyan: #00f0ff;
+      --amber: #ffb800;
+      --bg-dark: #060911;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: #e2e8f0;
+      font-family: 'Rajdhani', sans-serif;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(255, 42, 75, 0.12) 0%, transparent 55%),
+        radial-gradient(circle at 85% 90%, rgba(0, 240, 255, 0.08) 0%, transparent 50%),
+        linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 26px 26px, 26px 26px;
+    }
+
+    .scanlines::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 50;
+      opacity: 0.4;
+    }
+
+    .hud-box {
+      position: relative;
+      background: rgba(11, 16, 29, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(0, 240, 255, 0.18);
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(0, 240, 255, 0.04);
+    }
+
+    .hud-box::before, .hud-box::after {
+      content: '';
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .hud-box::before {
+      top: -1px; left: -1px;
+      border-top: 2px solid var(--cyan);
+      border-left: 2px solid var(--cyan);
+    }
+    .hud-box::after {
+      bottom: -1px; right: -1px;
+      border-bottom: 2px solid var(--crimson);
+      border-right: 2px solid var(--crimson);
+    }
+
+    @keyframes spinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes spinReverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+    @keyframes pulseRing { 0%, 100% { transform: scale(1); opacity: 0.75; } 50% { transform: scale(1.06); opacity: 1; } }
+
+    .animate-spin-slow { animation: spinSlow 24s linear infinite; transform-origin: center; }
+    .animate-spin-reverse { animation: spinReverse 16s linear infinite; transform-origin: center; }
+    .animate-pulse-ring { animation: pulseRing 3s ease-in-out infinite; transform-origin: center; }
+
+    @keyframes eqBounce { 0%, 100% { height: 4px; } 50% { height: 18px; } }
+    .eq-bar {
+      width: 3px;
+      background-color: var(--crimson);
+      border-radius: 2px;
+      animation: eqBounce 0.6s ease-in-out infinite;
+    }
+    .eq-bar:nth-child(2) { animation-delay: 0.15s; background-color: var(--cyan); }
+    .eq-bar:nth-child(3) { animation-delay: 0.3s; }
+    .eq-bar:nth-child(4) { animation-delay: 0.1s; background-color: var(--cyan); }
+    .eq-bar:nth-child(5) { animation-delay: 0.25s; }
+
+    .tactical-map-frame {
+      filter: invert(90%) hue-rotate(180deg) contrast(108%) saturate(135%);
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #060911; }
+    ::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.3); border-radius: 9999px; }
+
+    .ai-markdown p { margin-bottom: 0.5rem; }
+    .ai-markdown p:last-child { margin-bottom: 0; }
+    .ai-markdown pre {
+      background: #04060c;
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      margin: 0.5rem 0;
+      color: #00f0ff;
+    }
+    .ai-markdown code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(0, 240, 255, 0.12);
+      padding: 0.1rem 0.35rem;
+      border-radius: 0.25rem;
+      font-size: 0.85em;
+      color: #7dd3fc;
+    }
+    .ai-markdown pre code { background: transparent; padding: 0; color: inherit; }
+    .ai-markdown ul, .ai-markdown ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }
+    .ai-markdown ul { list-style-type: disc; }
+    .ai-markdown ol { list-style-type: decimal; }
+    .ai-markdown strong { color: #ffffff; font-weight: 700; }
+
+    .module-card{background:rgba(11,16,29,.88);border:1px solid rgba(0,240,255,.2);backdrop-filter:blur(12px);position:relative}
+    .module-card:before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(0,240,255,.035),transparent 45%,rgba(255,42,75,.035))}
+    .hud-input{width:100%;background:#060911;border:1px solid rgba(0,240,255,.25);border-radius:.65rem;padding:.7rem .85rem;color:#e2e8f0;outline:none}
+    .hud-input:focus{border-color:var(--crimson);box-shadow:0 0 0 2px rgba(255,42,75,.12)}
+    .hud-action{border:1px solid rgba(0,240,255,.35);background:rgba(0,240,255,.1);color:var(--cyan);border-radius:.65rem;padding:.65rem .9rem;font:700 11px 'JetBrains Mono';letter-spacing:.06em;transition:.2s}
+    .hud-action:hover{background:rgba(0,240,255,.2);transform:translateY(-1px)}
+    .hud-action.red{border-color:rgba(255,42,75,.45);background:rgba(255,42,75,.12);color:#ff6b82}
+    .hud-action.amber{border-color:rgba(255,184,0,.4);background:rgba(255,184,0,.1);color:#ffca55}
+    .tiny-label{font:10px 'JetBrains Mono';letter-spacing:.12em;color:#8ba3b7;text-transform:uppercase}
+    .archive-item{border:1px solid rgba(0,240,255,.14);background:rgba(6,9,17,.8);border-radius:.7rem;padding:.75rem}
+    .planet{border-radius:50%;box-shadow:inset -12px -8px 18px #0008,0 0 22px currentColor;cursor:pointer;transition:transform .2s}
+    .planet:hover{transform:scale(1.12)}
+    .stat-value{font:700 1.6rem Orbitron;color:#fff}
+    .nav-extra{min-width:0;font-size:10px}
+    @media(max-width:639px){.nav-extra span{display:none}.nav-extra{padding:.55rem .25rem}}
+
+  </style>
+</head>
+<body class="scanlines min-h-screen flex flex-col justify-between selection:bg-crimson selection:text-white">
+
+  <!-- TOP TELEMETRY & SPIDER-HUD HEADER -->
+  <header class="sticky top-0 z-30 bg-obsidian/95 backdrop-blur-md border-b border-cyan/20 px-3 py-2 sm:px-6">
+    <div class="max-w-5xl mx-auto flex items-center justify-between gap-2">
+      
+      <!-- Left: Reticle & Brand -->
+      <div class="flex items-center gap-2.5">
+        <div class="relative w-10 h-10 flex items-center justify-center shrink-0">
+          <svg viewBox="0 0 100 100" class="w-full h-full overflow-visible">
+            <circle cx="50" cy="50" r="45" fill="none" stroke="#00f0ff" stroke-width="1.5" stroke-dasharray="8 6 2 6" opacity="0.75" class="animate-spin-slow" />
+            <circle cx="50" cy="50" r="34" fill="none" stroke="#ff2a4b" stroke-width="2" stroke-dasharray="22 10" class="animate-spin-reverse" />
+            <path d="M32 46 Q42 35 48 48 Q40 54 32 46 Z" fill="#ff2a4b" class="animate-pulse-ring" />
+            <path d="M68 46 Q58 35 52 48 Q60 54 68 46 Z" fill="#ff2a4b" class="animate-pulse-ring" />
+            <circle cx="50" cy="50" r="4" fill="#00f0ff" />
+          </svg>
+        </div>
+
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-display font-black text-lg sm:text-2xl tracking-wider text-white">
+              E.V. <span class="text-crimson text-[10px] sm:text-xs font-mono font-bold align-middle px-1.5 py-0.5 rounded bg-crimson/15 border border-crimson/40">MK-X</span>
+            </h1>
+          </div>
+          <p id="header-clock" class="text-[10px] sm:text-xs font-mono text-cyan/85 tracking-wider uppercase">
+            STARK DAILY OS // ONLINE
+          </p>
+        </div>
+      </div>
+
+      <!-- Center: Live Weather & GPS Pills -->
+      <div class="flex items-center gap-1.5 sm:gap-3 font-mono text-[11px] sm:text-xs">
+        <div id="header-weather" class="px-2 py-1 rounded bg-hudpanel border border-amber/30 text-amber flex items-center gap-1.5">
+          <i class="fa-solid fa-cloud-sun"></i>
+          <span>--°C</span>
+        </div>
+        <div id="header-coords" class="hidden sm:flex px-2.5 py-1 rounded bg-hudpanel border border-cyan/20 text-cyan/90 items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>GPS LOCK</span>
+        </div>
+      </div>
+
+      <!-- Right: Voice, SFX & Settings -->
+      <div class="flex items-center gap-1 sm:gap-2">
+        <button id="btn-tts-toggle" onclick="toggleTTS()" title="Toggle E.V. Voice Speech"
+          class="p-2 sm:p-2.5 rounded-lg bg-hudpanel border border-cyan/25 text-slate-400 hover:text-cyan transition text-xs flex items-center gap-1">
+          <i id="icon-tts" class="fa-solid fa-volume-xmark"></i>
+          <span class="hidden md:inline font-mono text-[11px]">VOICE</span>
+        </button>
+
+        <button id="btn-sfx-toggle" onclick="toggleSFX()" title="Toggle UI Sound Effects"
+          class="p-2 sm:p-2.5 rounded-lg bg-hudpanel border border-cyan/25 text-cyan transition text-xs">
+          <i id="icon-sfx" class="fa-solid fa-wave-square"></i>
+        </button>
+
+        <button onclick="openSettings()" title="API Key & Saved Places"
+          class="p-2 sm:p-2.5 rounded-lg bg-hudpanel border border-crimson/40 text-crimson hover:bg-crimson/15 transition text-xs">
+          <i class="fa-solid fa-sliders"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE CONTAINER -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-2.5 sm:px-6 py-3 flex flex-col gap-3 pb-24 sm:pb-6">
+
+    <!-- DESKTOP TOP NAV BAR (Hidden on small mobile, replaced by fixed bottom dock) -->
+    <nav class="hidden sm:grid grid-cols-9 gap-1 bg-hudpanel/90 p-1.5 rounded-xl border border-cyan/20">
+      <button onclick="switchTab('neural')" id="tab-neural"
+        class="tab-btn active flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display text-xs font-bold tracking-wider transition-all bg-crimson/20 text-white border border-crimson/60 shadow-[0_0_12px_rgba(255,42,75,0.3)]">
+        <i class="fa-solid fa-brain text-crimson"></i>
+        <span>NEURAL AI</span>
+      </button>
+
+      <button onclick="switchTab('maps')" id="tab-maps"
+        class="tab-btn flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display text-xs font-bold tracking-wider transition-all text-slate-400 hover:text-white border border-transparent">
+        <i class="fa-solid fa-map-location-dot text-cyan"></i>
+        <span>MAPS // NAV</span>
+      </button>
+
+      <button onclick="switchTab('daily')" id="tab-daily"
+        class="tab-btn flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display text-xs font-bold tracking-wider transition-all text-slate-400 hover:text-white border border-transparent">
+        <i class="fa-solid fa-grid-2 text-amber"></i>
+        <span>DAILY OPS</span>
+      </button>
+
+      <button onclick="switchTab('missions')" id="tab-missions"
+        class="tab-btn flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display text-xs font-bold tracking-wider transition-all text-slate-400 hover:text-white border border-transparent">
+        <i class="fa-solid fa-crosshairs text-purple-400"></i>
+        <span>FOCUS & TASKS</span>
+      </button>
+
+      <button onclick="switchTab('radar')" id="tab-radar"
+        class="tab-btn flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display text-xs font-bold tracking-wider transition-all text-slate-400 hover:text-white border border-transparent">
+        <i class="fa-solid fa-radar text-emerald-400"></i>
+        <span>SPIDER-SENSE</span>
+      </button>
+      <button onclick="switchTab('command')" id="tab-command" class="tab-btn nav-extra flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display font-bold tracking-wider transition-all text-slate-400 border border-transparent"><i class="fa-solid fa-gauge-high text-amber"></i><span>COMMAND</span></button>
+      <button onclick="switchTab('lab')" id="tab-lab" class="tab-btn nav-extra flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display font-bold tracking-wider transition-all text-slate-400 border border-transparent"><i class="fa-solid fa-atom text-cyan"></i><span>HOLO LAB</span></button>
+      <button onclick="switchTab('archive')" id="tab-archive" class="tab-btn nav-extra flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display font-bold tracking-wider transition-all text-slate-400 border border-transparent"><i class="fa-solid fa-box-archive text-emerald-400"></i><span>ARCHIVE</span></button>
+      <button onclick="switchTab('intel')" id="tab-intel" class="tab-btn nav-extra flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg font-display font-bold tracking-wider transition-all text-slate-400 border border-transparent"><i class="fa-solid fa-satellite-dish text-crimson"></i><span>INTEL</span></button>
+    </nav>
+
+    <!-- =================================================================== -->
+    <!-- MODULE 1: E.V. NEURAL CHAT (AUTO-FAILOVER MULTI-MODEL AI)           -->
+    <!-- =================================================================== -->
+    <section id="view-neural" class="flex-1 flex flex-col gap-2.5">
+      <div class="hud-box rounded-xl flex-1 flex flex-col min-h-[430px] h-[calc(100vh-155px)] sm:h-[66vh] overflow-hidden">
+        
+        <!-- Subheader -->
+        <div class="px-3.5 py-2 border-b border-cyan/15 bg-obsidian/70 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="active-model-badge" class="font-mono text-[11px] text-cyan tracking-wider uppercase">E.V. AI // AUTO-FAILOVER READY</span>
+          </div>
+          <button onclick="clearChat()" class="text-[11px] font-mono text-slate-400 hover:text-crimson transition flex items-center gap-1">
+            <i class="fa-solid fa-rotate-right"></i> CLEAR
+          </button>
+        </div>
+
+        <div class="px-3 py-2 bg-obsidian/45 border-b border-cyan/10 flex flex-wrap items-center gap-2">
+          <span class="tiny-label">NEURAL PROFILE</span>
+          <select id="ev-mode" class="bg-hudpanel border border-cyan/25 rounded-lg px-2.5 py-1.5 text-xs text-cyan font-mono">
+            <option value="JARVIS">JARVIS // GENERAL</option>
+            <option value="RESEARCH">RESEARCH // ANALYSIS</option>
+            <option value="CODER">CODER // DEBUG</option>
+            <option value="TUTOR">TUTOR // LEARN</option>
+          </select>
+          <label class="ml-auto flex items-center gap-2 text-[10px] font-mono text-slate-400 cursor-pointer">
+            <input id="chat-attach" type="file" accept=".txt,.md,.csv,.json,.js,.html,.css,.py,.pdf" class="hidden" onchange="attachToChat(this)">
+            <button type="button" class="hud-action py-1.5 px-2" onclick="document.getElementById('chat-attach').click()"><i class="fa-solid fa-paperclip"></i> ATTACH FILE</button>
+          </label>
+          <span id="chat-attachment-name" class="text-[10px] text-amber font-mono"></span>
+        </div>
+
+        <!-- Chat Messages Stream -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5">
+          <div class="flex items-start gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-crimson/20 border border-crimson flex items-center justify-center shrink-0 mt-0.5">
+              <i class="fa-solid fa-spider text-crimson text-sm"></i>
+            </div>
+            <div class="flex-1 bg-obsidian/85 border border-cyan/25 rounded-xl rounded-tl-none p-3 text-sm sm:text-base leading-relaxed">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-display text-xs font-bold text-crimson tracking-wider">E.V. // TACTICAL AI</span>
+                <span class="font-mono text-[10px] text-emerald-400">ONLINE</span>
+              </div>
+              <p class="text-slate-200">
+                Neural link online, Boss. I now run on a <b>4-core auto-failover engine</b>—if one server gets busy, I automatically switch to a backup core so you never get stuck. Ask me anything!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Daily Prompt Chips -->
+        <div class="px-3 py-2 border-t border-cyan/10 bg-obsidian/50 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <button onclick="triggerQuickPrompt('Build me a sharp, realistic study & workout schedule for today.')"
+            class="shrink-0 px-3 py-1.5 rounded-full bg-cyan/10 hover:bg-cyan/20 border border-cyan/30 text-cyan font-mono text-xs transition">
+            <i class="fa-solid fa-calendar-check mr-1"></i> Plan My Day
+          </button>
+          <button onclick="triggerQuickPrompt('Summarize this topic clearly with key bullet points for revision: ')"
+            class="shrink-0 px-3 py-1.5 rounded-full bg-crimson/15 hover:bg-crimson/25 border border-crimson/40 text-crimson font-mono text-xs transition">
+            <i class="fa-solid fa-book-open mr-1"></i> Quick Study Notes
+          </button>
+          <button onclick="triggerQuickPrompt('Debug or write clean code for: ')"
+            class="shrink-0 px-3 py-1.5 rounded-full bg-amber/10 hover:bg-amber/20 border border-amber/30 text-amber font-mono text-xs transition">
+            <i class="fa-solid fa-code mr-1"></i> Code Co-Pilot
+          </button>
+          <button onclick="triggerQuickPrompt('Give me 3 quick high-protein meal or snack ideas I can make in 10 minutes.')"
+            class="shrink-0 px-3 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-mono text-xs transition">
+            <i class="fa-solid fa-utensils mr-1"></i> Quick Fuel
+          </button>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="p-2.5 sm:p-3 bg-obsidian/95 border-t border-cyan/20">
+          <form id="chat-form" onsubmit="handleChatSubmit(event)" class="flex items-center gap-2">
+            <button type="button" id="btn-mic" onclick="toggleVoiceInput()" title="Voice Command"
+              class="p-3 rounded-xl bg-hudpanel border border-cyan/30 text-cyan hover:bg-cyan/15 transition shrink-0">
+              <i id="icon-mic" class="fa-solid fa-microphone"></i>
+            </button>
+
+            <div id="voice-visualizer" class="hidden items-center gap-1 px-1.5">
+              <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+            </div>
+
+            <input id="chat-input" type="text" autocomplete="off"
+              placeholder="Ask E.V. anything..."
+              class="flex-1 min-w-0 bg-hudpanel/90 border border-cyan/25 focus:border-crimson rounded-xl px-3.5 py-3 text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none transition font-sans" />
+
+            <button type="submit" id="btn-send"
+              class="px-4 py-3 rounded-xl bg-gradient-to-r from-crimson to-rose-600 hover:from-rose-500 hover:to-crimson text-white font-display text-xs font-bold tracking-wider uppercase transition shadow-[0_0_15px_rgba(255,42,75,0.4)] shrink-0 flex items-center gap-1.5">
+              <span class="hidden sm:inline">SEND</span>
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- MODULE 2: GOOGLE MAPS // POINT A -> B DROPDOWN & LOCAL 3KM RECON    -->
+    <!-- =================================================================== -->
+    <section id="view-maps" class="hidden flex-col gap-3">
+      <div class="hud-box rounded-xl p-3.5 sm:p-5 flex flex-col gap-3.5">
+        
+        <!-- Header & Live GPS Status -->
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-cyan/15 pb-2.5">
+          <div>
+            <h2 class="font-display text-sm sm:text-lg font-bold text-white tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-map-location-dot text-cyan"></i> TACTICAL NAV-GRID
+            </h2>
+            <p id="map-sector-label" class="text-[11px] font-mono text-emerald-400">ACQUIRING LIVE GPS LOCK...</p>
+          </div>
+          <button onclick="centerMapOnMe()"
+            class="px-3 py-1.5 rounded-lg bg-cyan/15 hover:bg-cyan/25 border border-cyan/40 text-cyan font-mono text-xs font-bold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-location-crosshairs"></i> MY GPS
+          </button>
+        </div>
+
+        <!-- Point A to Point B Navigation with Google Maps-Style Autocomplete Dropdowns -->
+        <div class="bg-obsidian/90 border border-cyan/25 rounded-xl p-3 space-y-2.5 relative z-20">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[11px] text-crimson font-bold uppercase tracking-wider">
+              <i class="fa-solid fa-route mr-1"></i> POINT A <i class="fa-solid fa-arrow-right mx-1 text-cyan"></i> POINT B
+            </span>
+            <div class="flex items-center gap-1 font-mono text-[11px]">
+              <button type="button" onclick="setTravelMode('driving')" id="mode-driving"
+                class="nav-mode-btn px-2.5 py-1 rounded bg-cyan/20 border border-cyan text-cyan font-bold transition">
+                <i class="fa-solid fa-car"></i> DRIVE
+              </button>
+              <button type="button" onclick="setTravelMode('walking')" id="mode-walking"
+                class="nav-mode-btn px-2.5 py-1 rounded bg-hudpanel border border-cyan/20 text-slate-400 hover:text-white transition">
+                <i class="fa-solid fa-person-walking"></i> WALK
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <!-- POINT A INPUT + DROPDOWN -->
+            <div class="relative">
+              <div class="relative flex items-center">
+                <span class="absolute left-3 text-emerald-400 font-mono text-xs font-bold">A</span>
+                <input id="nav-point-a" type="text" autocomplete="off"
+                  onfocus="openPlaceDropdown('a')"
+                  oninput="handlePlaceSearchInput('a', this.value)"
+                  placeholder="Start: My Current GPS Location"
+                  class="w-full bg-hudpanel border border-cyan/30 focus:border-cyan rounded-lg pl-8 pr-9 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none" />
+                <button type="button" onclick="togglePlaceDropdown('a')"
+                  class="absolute right-2.5 text-cyan/70 hover:text-cyan p-1">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+              </div>
+              <!-- Dropdown Menu A -->
+              <div id="dropdown-a" class="hidden absolute left-0 right-0 top-full mt-1 bg-hudpanel border border-cyan/50 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-30 divide-y divide-cyan/10">
+              </div>
+            </div>
+
+            <!-- POINT B INPUT + DROPDOWN -->
+            <div class="relative">
+              <div class="relative flex items-center">
+                <span class="absolute left-3 text-crimson font-mono text-xs font-bold">B</span>
+                <input id="nav-point-b" type="text" autocomplete="off"
+                  onfocus="openPlaceDropdown('b')"
+                  oninput="handlePlaceSearchInput('b', this.value)"
+                  placeholder="Choose or type Destination..."
+                  class="w-full bg-hudpanel border border-cyan/30 focus:border-crimson rounded-lg pl-8 pr-9 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none" />
+                <button type="button" onclick="togglePlaceDropdown('b')"
+                  class="absolute right-2.5 text-crimson/80 hover:text-crimson p-1">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+              </div>
+              <!-- Dropdown Menu B -->
+              <div id="dropdown-b" class="hidden absolute left-0 right-0 top-full mt-1 bg-hudpanel border border-crimson/50 rounded-xl shadow-2xl max-h-60 overflow-y-auto z-30 divide-y divide-cyan/10">
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons & Live Distance/ETA -->
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <button onclick="plotRoute()"
+              class="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-gradient-to-r from-crimson to-rose-600 hover:from-rose-500 hover:to-crimson text-white font-display text-xs font-bold tracking-wider uppercase transition shadow-[0_0_15px_rgba(255,42,75,0.35)] flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-diamond-turn-right"></i> PLOT ROUTE
+            </button>
+
+            <a id="btn-open-gmaps-app" href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer"
+              class="flex-1 sm:flex-none px-4 py-2.5 rounded-lg bg-cyan/15 hover:bg-cyan/25 border border-cyan/40 text-cyan font-display text-xs font-bold tracking-wider uppercase transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-up-right-from-square"></i> GOOGLE MAPS APP
+            </a>
+
+            <div id="route-telemetry" class="hidden w-full sm:w-auto sm:ml-auto px-3 py-2 rounded-lg bg-hudpanel border border-emerald-500/40 font-mono text-xs text-emerald-400 flex items-center justify-center gap-3">
+              <span><i class="fa-solid fa-road mr-1"></i><b id="route-dist">--</b></span>
+              <span><i class="fa-solid fa-clock mr-1"></i><b id="route-eta">--</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRUE NEARBY 3KM RECON SCANNER -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="font-mono text-[11px] text-cyan uppercase"><i class="fa-solid fa-satellite-dish mr-1"></i>NEARBY RECON (WITHIN 3 KM OF GPS):</span>
+            <span id="nearby-active-label" class="font-mono text-[10px] text-slate-400">TAP CATEGORY</span>
+          </div>
+          <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <button onclick="scanNearbyPlaces('cafe', 'Cafes & Coffee')"
+              class="shrink-0 px-3 py-1.5 rounded-lg bg-obsidian hover:bg-cyan/15 border border-cyan/30 text-cyan font-mono text-xs transition">
+              <i class="fa-solid fa-mug-hot mr-1"></i> Cafes
+            </button>
+            <button onclick="scanNearbyPlaces('restaurant', 'Food & Restaurants')"
+              class="shrink-0 px-3 py-1.5 rounded-lg bg-obsidian hover:bg-cyan/15 border border-cyan/30 text-cyan font-mono text-xs transition">
+              <i class="fa-solid fa-utensils mr-1"></i> Food
+            </button>
+            <button onclick="scanNearbyPlaces('hospital', 'Hospitals & Clinics')"
+              class="shrink-0 px-3 py-1.5 rounded-lg bg-obsidian hover:bg-crimson/15 border border-crimson/40 text-crimson font-mono text-xs transition">
+              <i class="fa-solid fa-kit-medical mr-1"></i> Hospitals
+            </button>
+            <button onclick="scanNearbyPlaces('pharmacy', '24/7 Pharmacies')"
+              class="shrink-0 px-3 py-1.5 rounded-lg bg-obsidian hover:bg-crimson/15 border border-crimson/40 text-crimson font-mono text-xs transition">
+              <i class="fa-solid fa-pills mr-1"></i> Pharmacy
+            </button>
+            <button onclick="scanNearbyPlaces('police', 'Police Stations')"
+              class="shrink-0 px-3 py-1.5 rounded-lg bg-obsidian hover:bg-crimson/15 border border-crimson/40 text-crimson font-mono text-xs transition">
+              <i class="fa-solid fa-shield-halved mr-1"></i> Police
+            </button>
+            <button onclick="scanNearbyPlaces('atm', 'ATMs & Banks')"
+              class="shrink-0 px-3 py-1.5 rounded-lg bg-obsidian hover:bg-amber/15 border border-amber/35 text-amber font-mono text-xs transition">
+              <i class="fa-solid fa-indian-rupee-sign mr-1"></i> ATMs
+            </button>
+            <button onclick="scanNearbyPlaces('bus_station', 'Transit & Bus Stops')"
+              class="shrink-0 px-3 py-1.5 rounded-lg bg-obsidian hover:bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-mono text-xs transition">
+              <i class="fa-solid fa-bus mr-1"></i> Transit
+            </button>
+          </div>
+
+          <!-- Nearby Results List (Sorted by exact distance from your GPS) -->
+          <div id="nearby-results-box" class="hidden mt-2.5 bg-obsidian/95 border border-cyan/25 rounded-xl p-2.5 max-h-44 overflow-y-auto space-y-1.5">
+          </div>
+        </div>
+
+        <!-- Embedded Google Maps Viewport -->
+        <div class="relative rounded-xl overflow-hidden border border-cyan/30 bg-obsidian h-[300px] sm:h-[380px]">
+          <iframe id="gmaps-iframe"
+            class="w-full h-full border-0 tactical-map-frame"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+            src="https://maps.google.com/maps?q=18.6298,73.7997&ll=18.6298,73.7997&z=15&output=embed">
+          </iframe>
+          <div class="pointer-events-none absolute top-2 left-2 px-2 py-0.5 rounded bg-obsidian/85 border border-cyan/30 font-mono text-[10px] text-cyan">
+            SAT-LINK // LIVE SECTOR
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- MODULE 3: DAILY OPS (HYDRATION, POCKET EXPENSE LEDGER & VAULT NOTE) -->
+    <!-- =================================================================== -->
+    <section id="view-daily" class="hidden flex-col gap-3.5">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        
+        <!-- Tool A: Hydration & Energy Telemetry -->
+        <div class="hud-box rounded-xl p-4 flex flex-col justify-between gap-3">
+          <div class="flex items-center justify-between border-b border-cyan/15 pb-2">
+            <span class="font-display text-xs sm:text-sm font-bold text-white tracking-wider">
+              <i class="fa-solid fa-droplet text-cyan mr-1.5"></i>SUIT HYDRATION & FUEL
+            </span>
+            <button onclick="resetHydration()" class="font-mono text-[10px] text-slate-400 hover:text-crimson">RESET DAY</button>
+          </div>
+
+          <div>
+            <div class="flex items-end justify-between mb-1.5 font-mono">
+              <span class="text-2xl font-bold text-cyan"><span id="water-ml">0</span> <span class="text-xs text-slate-400">/ 2500 ML</span></span>
+              <span class="text-xs text-amber"><i class="fa-solid fa-mug-hot mr-1"></i><span id="caffeine-count">0</span> CAFFEINE</span>
+            </div>
+            <div class="w-full h-3 bg-obsidian rounded-full overflow-hidden border border-cyan/25">
+              <div id="water-bar" class="h-full bg-gradient-to-r from-cyan to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            <button onclick="logIntake(250, 0)" class="py-2 rounded-lg bg-cyan/15 hover:bg-cyan/25 border border-cyan/40 text-cyan font-mono text-xs font-bold transition">
+              +250ml H₂O
+            </button>
+            <button onclick="logIntake(500, 0)" class="py-2 rounded-lg bg-cyan/15 hover:bg-cyan/25 border border-cyan/40 text-cyan font-mono text-xs font-bold transition">
+              +500ml Bottle
+            </button>
+            <button onclick="logIntake(0, 1)" class="py-2 rounded-lg bg-amber/15 hover:bg-amber/25 border border-amber/40 text-amber font-mono text-xs font-bold transition">
+              +1 Coffee/Energy
+            </button>
+          </div>
+        </div>
+
+        <!-- Tool B: Daily Pocket Expense Tracker -->
+        <div class="hud-box rounded-xl p-4 flex flex-col justify-between gap-3">
+          <div class="flex items-center justify-between border-b border-cyan/15 pb-2">
+            <span class="font-display text-xs sm:text-sm font-bold text-white tracking-wider">
+              <i class="fa-solid fa-wallet text-emerald-400 mr-1.5"></i>DAILY SPEND LEDGER
+            </span>
+            <span class="font-mono text-sm font-bold text-emerald-400">TOTAL: ₹<span id="expense-total">0</span></span>
+          </div>
+
+          <form onsubmit="addExpense(event)" class="flex gap-2">
+            <input id="exp-label" type="text" placeholder="Item (e.g. Coffee, Metro)"
+              class="flex-1 min-w-0 bg-obsidian border border-cyan/25 rounded-lg px-3 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-cyan focus:outline-none" />
+            <input id="exp-amount" type="number" placeholder="₹ Amt"
+              class="w-24 bg-obsidian border border-cyan/25 rounded-lg px-2.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-emerald-400 focus:outline-none" />
+            <button type="submit" class="px-3.5 py-2 rounded-lg bg-emerald-500 text-obsidian font-display text-xs font-bold hover:bg-emerald-400 transition">
+              +
+            </button>
+          </form>
+
+          <div id="expense-list" class="space-y-1.5 max-h-28 overflow-y-auto pr-1 text-xs font-mono">
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool C: Encrypted Quick-Scratchpad Vault -->
+      <div class="hud-box rounded-xl p-4 flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="font-display text-xs sm:text-sm font-bold text-white tracking-wider">
+            <i class="fa-solid fa-note-sticky text-crimson mr-1.5"></i>TACTICAL SCRATCHPAD // AUTO-SAVED VAULT
+          </span>
+          <span id="note-saved-badge" class="font-mono text-[10px] text-emerald-400">SYNCED TO DEVICE</span>
+        </div>
+        <textarea id="quick-scratchpad" rows="4" oninput="saveScratchpad()"
+          placeholder="Drop quick formulas, links, locker codes, reminders, or brain-dumps here—automatically saved on your phone/PC..."
+          class="w-full bg-obsidian/90 border border-cyan/25 focus:border-cyan rounded-xl p-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none font-mono"></textarea>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- MODULE 4: FOCUS TIMER & PRIORITY MISSIONS                           -->
+    <!-- =================================================================== -->
+    <section id="view-missions" class="hidden flex-col gap-3.5">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        
+        <!-- Left: Suit Charge Focus Timer -->
+        <div class="hud-box rounded-xl p-4 flex flex-col items-center justify-between text-center">
+          <div class="w-full flex items-center justify-between border-b border-cyan/15 pb-2 mb-2">
+            <span class="font-mono text-xs text-amber uppercase"><i class="fa-solid fa-bolt mr-1"></i>FOCUS REACTOR</span>
+            <div class="flex gap-1 font-mono text-[10px]">
+              <button onclick="setTimerMinutes(25)" class="px-1.5 py-0.5 rounded bg-obsidian border border-cyan/30 text-cyan hover:bg-cyan/15">25M</button>
+              <button onclick="setTimerMinutes(50)" class="px-1.5 py-0.5 rounded bg-obsidian border border-cyan/30 text-cyan hover:bg-cyan/15">50M</button>
+            </div>
+          </div>
+
+          <div class="relative w-36 h-36 my-1 flex items-center justify-center">
+            <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(0,240,255,0.12)" stroke-width="6" />
+              <circle id="timer-progress-ring" cx="50" cy="50" r="44" fill="none" stroke="#ff2a4b" stroke-width="6"
+                stroke-dasharray="276.46" stroke-dashoffset="0" stroke-linecap="round" class="transition-all duration-500" />
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span id="timer-display" class="font-display text-2xl sm:text-3xl font-black text-white tracking-wider">25:00</span>
+              <span id="timer-status" class="font-mono text-[10px] text-cyan uppercase">READY</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 w-full mt-2">
+            <button id="btn-timer-toggle" onclick="toggleTimer()"
+              class="flex-1 py-2.5 rounded-lg bg-crimson hover:bg-rose-600 text-white font-display text-xs font-bold tracking-wider uppercase transition">
+              INITIATE
+            </button>
+            <button onclick="resetTimer()"
+              class="px-3 py-2.5 rounded-lg bg-obsidian border border-cyan/30 text-cyan hover:bg-cyan/10 font-mono text-xs transition">
+              RESET
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Tactical Mission Tracker -->
+        <div class="hud-box rounded-xl p-4 md:col-span-2 flex flex-col">
+          <div class="flex items-center justify-between border-b border-cyan/15 pb-2.5 mb-3">
+            <div>
+              <h2 class="font-display text-sm sm:text-base font-bold text-white tracking-wider">ACTIVE DIRECTIVES</h2>
+              <p class="font-mono text-[11px] text-slate-400">DAILY PRIORITY CHECKLIST</p>
+            </div>
+            <span id="mission-count" class="font-mono text-xs px-2.5 py-1 rounded bg-cyan/15 text-cyan font-bold">0 ACTIVE</span>
+          </div>
+
+          <form onsubmit="addMission(event)" class="flex flex-col sm:flex-row gap-2 mb-3">
+            <input id="mission-input" type="text" placeholder="Add a daily task or study target..."
+              class="flex-1 bg-obsidian border border-cyan/25 focus:border-cyan rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none" />
+            <div class="flex gap-2">
+              <select id="mission-threat" class="bg-obsidian border border-cyan/25 rounded-lg px-3 py-2.5 font-mono text-xs text-white focus:outline-none">
+                <option value="LOW">NORMAL</option>
+                <option value="MED" selected>PRIORITY</option>
+                <option value="CRITICAL">URGENT</option>
+              </select>
+              <button type="submit" class="px-4 py-2.5 rounded-lg bg-cyan text-obsidian font-display text-xs font-bold tracking-wider uppercase hover:bg-cyan/90 transition">
+                + ADD
+              </button>
+            </div>
+          </form>
+
+          <div id="mission-list" class="flex-1 space-y-2 overflow-y-auto max-h-[260px] pr-1">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- MODULE 5: SPIDER-SENSE SAFETY RADAR & EXTRACTION CALL               -->
+    <!-- =================================================================== -->
+    <section id="view-radar" class="hidden flex-col gap-3.5">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        
+        <!-- Live Radar Sweep Canvas -->
+        <div class="hud-box rounded-xl p-4 flex flex-col items-center justify-center relative">
+          <div class="w-full flex items-center justify-between mb-2">
+            <span class="font-mono text-xs text-emerald-400 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> SPIDER-SENSE PROXIMITY
+            </span>
+            <span class="font-mono text-[11px] text-slate-400">SECTOR SCAN</span>
+          </div>
+          <div class="w-full max-w-[230px] aspect-square relative my-1">
+            <canvas id="radar-canvas" class="w-full h-full rounded-full"></canvas>
+          </div>
+          <p class="font-mono text-[11px] text-cyan/80 text-center mt-1">PERIMETER CLEAR // BEACON ACTIVE</p>
+        </div>
+
+        <!-- Telemetry & Safety Tools -->
+        <div class="hud-box rounded-xl p-4 flex flex-col justify-between gap-3.5">
+          <div>
+            <h2 class="font-display text-sm sm:text-base font-bold text-white tracking-wider mb-1">TACTICAL SAFETY PROTOCOLS</h2>
+            <p class="font-mono text-[11px] text-slate-400 mb-3">LIVE GPS SHARE & RAPID EXTRACTION</p>
+
+            <div class="bg-obsidian border border-cyan/25 rounded-xl p-3 mb-3">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-mono text-[11px] text-cyan uppercase">LIVE TELEMETRY BEACON</span>
+                <button onclick="refreshGPS(true)" class="font-mono text-[11px] text-crimson hover:underline">
+                  <i class="fa-solid fa-location-crosshairs"></i> REFRESH
+                </button>
+              </div>
+              <div id="gps-readout" class="font-mono text-sm text-white font-bold">
+                ACQUIRING SATELLITE LOCK...
+              </div>
+              <div id="gps-status" class="font-mono text-[11px] text-slate-400 mt-0.5">
+                Checking device GPS...
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="copyCoordinates()"
+                class="py-2.5 px-3 rounded-xl bg-cyan/15 hover:bg-cyan/25 border border-cyan/40 text-cyan font-display text-[11px] font-bold tracking-wider uppercase transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-copy"></i> COPY LINK
+              </button>
+              <button onclick="shareWhatsAppBeacon()"
+                class="py-2.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 font-display text-[11px] font-bold tracking-wider uppercase transition flex items-center justify-center gap-1.5">
+                <i class="fa-brands fa-whatsapp"></i> WHATSAPP SOS
+              </button>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-crimson/25">
+            <p class="font-mono text-[11px] text-slate-400 mb-2">
+              Need an instant excuse to step out of an awkward situation? Trigger a realistic incoming call:
+            </p>
+            <button onclick="triggerFakeCall()"
+              class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-crimson to-red-700 hover:from-red-500 hover:to-crimson text-white font-display text-xs sm:text-sm font-black tracking-wider uppercase transition shadow-[0_0_20px_rgba(255,42,75,0.45)] flex items-center justify-center gap-2">
+              <i class="fa-solid fa-phone-volume animate-bounce"></i>
+              <span>TRIGGER EXTRACTION CALL</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+
+    <!-- COMMAND CENTRE -->
+    <section id="view-command" class="hidden flex-col gap-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div><p class="tiny-label text-cyan">STARK INDUSTRIES // OPERATIONS</p><h2 class="font-display text-xl sm:text-2xl font-black text-white">COMMAND CENTRE</h2></div>
+        <div class="text-right"><div id="command-clock" class="font-display text-2xl text-cyan">--:--:--</div><div id="command-date" class="tiny-label">SYNCING LOCAL TIME</div></div>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div class="hud-box rounded-xl p-3"><div class="tiny-label">LOCAL WEATHER</div><div id="cc-weather" class="stat-value">--°</div><div id="cc-weather-desc" class="text-xs text-slate-400">Awaiting GPS</div></div>
+        <div class="hud-box rounded-xl p-3"><div class="tiny-label">MISSION STATUS</div><div id="cc-missions" class="stat-value">0</div><div class="text-xs text-slate-400">Open directives</div></div>
+        <div class="hud-box rounded-xl p-3"><div class="tiny-label">ARCHIVE FILES</div><div id="cc-files" class="stat-value">0</div><div class="text-xs text-slate-400">Local records</div></div>
+        <div class="hud-box rounded-xl p-3"><div class="tiny-label">SYSTEM STATUS</div><div class="stat-value text-emerald-400">ONLINE</div><div class="text-xs text-slate-400">All local modules ready</div></div>
+      </div>
+      <div class="grid lg:grid-cols-5 gap-3">
+        <div class="hud-box rounded-xl p-4 lg:col-span-3">
+          <div class="flex justify-between items-center mb-3"><h3 class="font-display text-sm text-white">GLOBAL HOLOGRAPHIC VIEW</h3><span class="tiny-label">LIVE EARTH // DAY-NIGHT</span></div>
+          <div class="relative rounded-xl overflow-hidden border border-cyan/20 min-h-[230px] bg-[#050a14]">
+            <iframe title="Earth visualization" class="w-full h-[260px] opacity-90" src="https://earth.nullschool.net/#current/wind/surface/level/orthographic=-0.00,20.00,250" loading="lazy"></iframe>
+            <div class="absolute bottom-2 left-2 text-[9px] font-mono text-cyan bg-black/60 px-2 py-1 rounded">EARTH // LIVE ATMOSPHERIC DATA</div>
+          </div>
+        </div>
+        <div class="hud-box rounded-xl p-4 lg:col-span-2">
+          <div class="flex items-center justify-between mb-3"><h3 class="font-display text-sm text-white">MISSION SNAPSHOT</h3><button class="hud-action py-1" onclick="switchTab('missions')">OPEN</button></div>
+          <div id="cc-task-list" class="space-y-2 text-sm"></div>
+          <div class="border-t border-cyan/15 mt-4 pt-3"><div class="tiny-label mb-2">AI DAILY BRIEFING</div><p id="cc-briefing" class="text-sm text-slate-300 leading-relaxed">Your command centre is ready. Generate a briefing from your current missions and local conditions.</p><button class="hud-action red mt-3 w-full" onclick="generateBriefing()">GENERATE BRIEFING <i class="fa-solid fa-bolt ml-1"></i></button></div>
+        </div>
+      </div>
+      <div class="hud-box rounded-xl p-4"><div class="flex justify-between items-center mb-3"><h3 class="font-display text-sm text-white">QUICK DEPLOY</h3><span class="tiny-label">DIRECT MODULE ACCESS</span></div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <button class="hud-action" onclick="switchTab('neural')"><i class="fa-solid fa-brain mr-1"></i> NEURAL AI</button>
+        <button class="hud-action" onclick="switchTab('maps')"><i class="fa-solid fa-map mr-1"></i> NAV GRID</button>
+        <button class="hud-action" onclick="switchTab('lab')"><i class="fa-solid fa-atom mr-1"></i> HOLO LAB</button>
+        <button class="hud-action" onclick="switchTab('archive')"><i class="fa-solid fa-folder mr-1"></i> ARCHIVE</button>
+      </div></div>
+    </section>
+
+    <!-- HOLO LAB -->
+    <section id="view-lab" class="hidden flex-col gap-3">
+      <div><p class="tiny-label text-cyan">INTERACTIVE SCIENCE SUITE</p><h2 class="font-display text-xl font-black text-white">HOLO LAB</h2></div>
+      <div class="grid lg:grid-cols-2 gap-3">
+        <div class="hud-box rounded-xl p-4">
+          <h3 class="font-display text-sm text-white mb-1">PERIODIC TABLE</h3><p class="text-xs text-slate-400 mb-3">Select an element to inspect its core properties.</p>
+          <div id="periodic-grid" class="grid grid-cols-9 sm:grid-cols-10 gap-1"></div>
+          <div id="element-info" class="mt-3 p-3 rounded-lg bg-obsidian border border-cyan/20 text-sm text-slate-300">Select an element above.</div>
+        </div>
+        <div class="hud-box rounded-xl p-4">
+          <h3 class="font-display text-sm text-white mb-3">PHYSICS SIMULATOR // MOTION</h3>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-xs text-slate-400">Initial velocity (m/s)<input id="sim-velocity" class="hud-input mt-1" type="number" value="5" step=".1"></label>
+            <label class="text-xs text-slate-400">Acceleration (m/s²)<input id="sim-accel" class="hud-input mt-1" type="number" value="2" step=".1"></label>
+            <label class="text-xs text-slate-400">Time (seconds)<input id="sim-time" class="hud-input mt-1" type="number" value="6" step=".1"></label>
+            <label class="text-xs text-slate-400">Mass (kg)<input id="sim-mass" class="hud-input mt-1" type="number" value="2" step=".1"></label>
+          </div>
+          <button class="hud-action red mt-3 w-full" onclick="runPhysicsSim()">RUN SIMULATION</button>
+          <div id="sim-result" class="mt-3 bg-obsidian border border-cyan/20 rounded-lg p-3 text-sm text-slate-300">Awaiting parameters...</div>
+          <canvas id="sim-canvas" width="640" height="150" class="w-full mt-3 rounded-lg bg-[#050a14] border border-cyan/15"></canvas>
+        </div>
+        <div class="hud-box rounded-xl p-4">
+          <h3 class="font-display text-sm text-white mb-2">ORBITAL SYSTEM</h3>
+          <div class="relative h-64 flex items-center justify-center overflow-hidden rounded-xl bg-[#040812] border border-cyan/15">
+            <div class="absolute w-14 h-14 rounded-full bg-amber-300 shadow-[0_0_35px_#ffb800]"></div>
+            <div class="absolute w-28 h-28 border border-cyan/20 rounded-full animate-spin-slow"><div class="planet absolute w-4 h-4 bg-slate-300 text-slate-300 top-1/2 -left-2" onclick="planetInfo('Mercury','Smallest planet; rocky and closest to the Sun.')"></div></div>
+            <div class="absolute w-44 h-44 border border-cyan/20 rounded-full animate-spin-reverse"><div class="planet absolute w-6 h-6 bg-amber-500 text-amber-500 top-1/2 -left-3" onclick="planetInfo('Venus','A hot rocky world with a dense atmosphere.')"></div></div>
+            <div class="absolute w-60 h-60 border border-cyan/20 rounded-full animate-spin-slow"><div class="planet absolute w-6 h-6 bg-blue-500 text-blue-500 top-1/2 -left-3" onclick="planetInfo('Earth','Our home world, with liquid-water oceans.')"></div></div>
+          </div>
+          <p id="planet-readout" class="text-xs text-slate-400 mt-2">Select a planet to inspect it.</p>
+        </div>
+        <div class="hud-box rounded-xl p-4">
+          <h3 class="font-display text-sm text-white mb-2">FUNCTION PLOTTER</h3>
+          <div class="flex gap-2"><input id="plot-expression" class="hud-input" value="Math.sin(x)" aria-label="JavaScript math expression"><button class="hud-action red shrink-0" onclick="plotFunction()">PLOT</button></div>
+          <p class="tiny-label mt-2">Supported: x, Math.sin(x), Math.cos(x), x*x, Math.sqrt(Math.abs(x))</p>
+          <canvas id="function-canvas" width="640" height="230" class="w-full mt-3 rounded-lg bg-[#050a14] border border-cyan/15"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIGITAL ARCHIVE -->
+    <section id="view-archive" class="hidden flex-col gap-3">
+      <div><p class="tiny-label text-cyan">KNOWLEDGE STORAGE // LOCAL-FIRST</p><h2 class="font-display text-xl font-black text-white">DIGITAL ARCHIVE</h2></div>
+      <div class="hud-box rounded-xl p-4">
+        <div class="flex flex-wrap justify-between items-center gap-2 mb-3"><div><h3 class="font-display text-sm text-white">INGEST FILES & NOTES</h3><p class="text-xs text-slate-400">Text-based files are indexed locally. PDF text is extracted locally in your browser; files are not uploaded to a server.</p></div><label class="hud-action cursor-pointer"><i class="fa-solid fa-upload mr-1"></i> INGEST FILES<input id="archive-upload" type="file" multiple accept=".txt,.md,.csv,.json,.js,.html,.css,.py,.pdf" class="hidden" onchange="ingestArchiveFiles(this.files)"></label></div>
+        <textarea id="archive-note" class="hud-input min-h-[90px]" placeholder="Write a research note, project idea, or anything worth keeping..."></textarea>
+        <div class="flex gap-2 mt-2"><input id="archive-note-title" class="hud-input" placeholder="Note title"><button class="hud-action red shrink-0" onclick="saveArchiveNote()">SAVE NOTE</button></div>
+      </div>
+      <div class="hud-box rounded-xl p-4">
+        <div class="flex flex-wrap justify-between items-center gap-2 mb-3"><h3 class="font-display text-sm text-white">ARCHIVE INDEX</h3><input id="archive-search" class="hud-input max-w-xs" placeholder="Search archive..." oninput="renderArchive()"></div>
+        <div id="archive-list" class="grid sm:grid-cols-2 gap-2"></div>
+      </div>
+    </section>
+
+    <!-- GLOBAL INTELLIGENCE -->
+    <section id="view-intel" class="hidden flex-col gap-3">
+      <div class="flex items-center justify-between flex-wrap gap-2"><div><p class="tiny-label text-cyan">WORLD SIGNAL // LIVE FEEDS</p><h2 class="font-display text-xl font-black text-white">GLOBAL INTELLIGENCE</h2></div><button class="hud-action red" onclick="loadIntel()">REFRESH FEEDS <i class="fa-solid fa-rotate ml-1"></i></button></div>
+      <div class="grid sm:grid-cols-3 gap-2">
+        <button class="hud-action" onclick="loadIntel('science')">SCIENCE & TECH</button><button class="hud-action" onclick="loadIntel('space')">NASA / SPACE</button><button class="hud-action" onclick="loadIntel('world')">WORLD SIGNAL</button>
+      </div>
+      <div id="intel-status" class="tiny-label">Select a signal channel to load current headlines.</div>
+      <div id="intel-feed" class="grid md:grid-cols-2 gap-3"></div>
+      <p class="text-[10px] text-slate-500 font-mono">External feeds require an internet connection. Headlines open at their original publishers.</p>
+    </section>
+
+  <!-- MOBILE FIXED BOTTOM NAVIGATION DOCK (Thumb-Friendly) -->
+  <nav class="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-obsidian/95 backdrop-blur-xl border-t border-cyan/25 px-1.5 py-1.5 grid grid-cols-9 gap-0.5 overflow-x-auto">
+    <button onclick="switchTab('neural')" id="mob-tab-neural"
+      class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-crimson bg-crimson/15 border border-crimson/40">
+      <i class="fa-solid fa-brain text-sm"></i>
+      <span class="font-display text-[9px] font-bold mt-0.5">AI CHAT</span>
+    </button>
+    <button onclick="switchTab('maps')" id="mob-tab-maps"
+      class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400">
+      <i class="fa-solid fa-map-location-dot text-sm"></i>
+      <span class="font-display text-[9px] font-bold mt-0.5">MAPS</span>
+    </button>
+    <button onclick="switchTab('daily')" id="mob-tab-daily"
+      class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400">
+      <i class="fa-solid fa-bolt text-sm"></i>
+      <span class="font-display text-[9px] font-bold mt-0.5">DAILY</span>
+    </button>
+    <button onclick="switchTab('missions')" id="mob-tab-missions"
+      class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400">
+      <i class="fa-solid fa-crosshairs text-sm"></i>
+      <span class="font-display text-[9px] font-bold mt-0.5">TASKS</span>
+    </button>
+    <button onclick="switchTab('radar')" id="mob-tab-radar"
+      class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400">
+      <i class="fa-solid fa-radar text-sm"></i>
+      <span class="font-display text-[9px] font-bold mt-0.5">SAFETY</span>
+    </button>
+    <button onclick="switchTab('command')" id="mob-tab-command" class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400"><i class="fa-solid fa-gauge-high text-sm"></i><span class="font-display text-[9px] font-bold mt-0.5">HOME</span></button>
+    <button onclick="switchTab('lab')" id="mob-tab-lab" class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400"><i class="fa-solid fa-atom text-sm"></i><span class="font-display text-[9px] font-bold mt-0.5">LAB</span></button>
+    <button onclick="switchTab('archive')" id="mob-tab-archive" class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400"><i class="fa-solid fa-box-archive text-sm"></i><span class="font-display text-[9px] font-bold mt-0.5">FILES</span></button>
+    <button onclick="switchTab('intel')" id="mob-tab-intel" class="mob-tab-btn flex flex-col items-center justify-center py-1.5 rounded-lg text-slate-400"><i class="fa-solid fa-satellite-dish text-sm"></i><span class="font-display text-[9px] font-bold mt-0.5">INTEL</span></button>
+  </nav>
+
+  <!-- SIMULATED INCOMING CALL OVERLAY -->
+  <div id="fake-call-overlay" class="hidden fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-between py-14 px-6 text-center">
+    <div class="mt-6">
+      <div class="w-24 h-24 mx-auto rounded-full bg-crimson/20 border-2 border-crimson flex items-center justify-center mb-4 animate-pulse shadow-[0_0_30px_rgba(255,42,75,0.6)]">
+        <i class="fa-solid fa-user-shield text-4xl text-crimson"></i>
+      </div>
+      <p class="font-mono text-xs text-cyan tracking-widest uppercase mb-1">ENCRYPTED PRIORITY LINE</p>
+      <h2 class="font-display text-3xl font-black text-white tracking-wide">TONY STARK</h2>
+      <p id="call-timer-text" class="font-mono text-sm text-emerald-400 mt-2 animate-pulse">INCOMING CALL...</p>
+    </div>
+
+    <div class="w-full max-w-xs flex items-center justify-around mb-8">
+      <button onclick="endFakeCall()" class="flex flex-col items-center gap-2">
+        <div class="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center text-white text-2xl shadow-lg transition">
+          <i class="fa-solid fa-phone-slash"></i>
+        </div>
+        <span class="font-mono text-xs text-slate-300">DECLINE</span>
+      </button>
+
+      <button id="btn-accept-call" onclick="acceptFakeCall()" class="flex flex-col items-center gap-2">
+        <div class="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center text-white text-2xl shadow-lg animate-bounce transition">
+          <i class="fa-solid fa-phone"></i>
+        </div>
+        <span class="font-mono text-xs text-slate-300">ACCEPT</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- SETTINGS & SAVED PLACES MODAL -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="hud-box rounded-2xl max-w-md w-full p-5">
+      <div class="flex items-center justify-between border-b border-cyan/20 pb-3 mb-4">
+        <h3 class="font-display text-base font-bold text-white tracking-wider">
+          <i class="fa-solid fa-sliders text-crimson mr-2"></i>E.V. SYSTEM CONFIG
+        </h3>
+        <button onclick="closeSettings()" class="text-slate-400 hover:text-white text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-sm">
+        <div>
+          <label class="block font-mono text-xs text-cyan mb-1">GEMINI API KEY (GOOGLE AI STUDIO)</label>
+          <input id="custom-api-key" type="password" placeholder="Paste your Google AI Studio key..."
+            class="w-full bg-obsidian border border-cyan/30 rounded-lg px-3 py-2 font-mono text-xs text-white focus:border-crimson focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block font-mono text-xs text-amber mb-1">SAVED HOME / BASE ADDRESS (FOR MAPS DROPDOWN)</label>
+          <input id="custom-home-addr" type="text" placeholder="e.g., Wakad, Pune"
+            class="w-full bg-obsidian border border-cyan/30 rounded-lg px-3 py-2 font-mono text-xs text-white focus:border-amber focus:outline-none" />
+        </div>
+
+        <button onclick="saveSettings()"
+          class="w-full py-2.5 rounded-xl bg-crimson hover:bg-rose-600 text-white font-display text-xs font-bold tracking-wider uppercase transition">
+          SAVE CONFIGURATION
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="hud-toast" class="fixed bottom-16 sm:bottom-5 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-2 rounded-xl bg-hudpanel border border-cyan text-cyan font-mono text-xs shadow-[0_0_20px_rgba(0,240,255,0.4)] whitespace-nowrap">
+    SYSTEM NOTIFICATION
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- JAVASCRIPT ENGINE                                                     -->
+  <!-- ===================================================================== -->
+  <script>
+    const defaultApiKey = "";
+    // Automatic multi-model failover list so "High Demand" never stops your chat
+    const MODEL_FALLBACK_CHAIN = [
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite"
+    ];
+
+    let pendingChatAttachment = '';
+    let state = {
+      sfxEnabled: true,
+      ttsEnabled: false,
+      travelMode: 'driving',
+      customApiKey: localStorage.getItem('ev_custom_api_key') || '',
+      homeAddress: localStorage.getItem('ev_home_addr') || 'Pimpri-Chinchwad, Pune',
+      chatHistory: [],
+      missions: JSON.parse(localStorage.getItem('ev_missions')) || [
+        { id: 1, text: 'Review key concepts & practice questions', threat: 'CRITICAL', done: false },
+        { id: 2, text: 'Drink 2.5L water & stay hydrated', threat: 'LOW', done: false }
+      ],
+      expenses: JSON.parse(localStorage.getItem('ev_expenses')) || [],
+      waterMl: parseInt(localStorage.getItem('ev_water_ml') || '0', 10),
+      caffeine: parseInt(localStorage.getItem('ev_caffeine') || '0', 10),
+      coords: { lat: 18.6298, lon: 73.7997, live: false },
+      originCoords: null,
+      destCoords: null
+    };
+
+    const EV_SYSTEM_PROMPT = `You are E.V. (Enhanced Vision), a futuristic Stark-Tech tactical AI co-pilot for daily life, studying, coding, and navigation.
+Be sharp, clear, encouraging, and concise. Use clean Markdown bullet points and code blocks when helpful.`;
+
+    function buildGeminiRequest(model, bodyObj, apiKey) {
+      const cleanKey = (apiKey || '').trim();
+      const headers = { 'Content-Type': 'application/json' };
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      if (cleanKey) headers['x-goog-api-key'] = cleanKey;
+      return fetch(url, { method: 'POST', headers, body: JSON.stringify(bodyObj) });
+    }
+
+    // -----------------------------------------------------------------------
+    // 1. HUD SOUND EFFECTS & TOASTS
+    // -----------------------------------------------------------------------
+    let audioCtx = null;
+    function playHudSound(type = 'click') {
+      if (!state.sfxEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        if (type === 'click') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(920, now);
+          osc.frequency.exponentialRampToValueAtTime(1450, now + 0.055);
+          gain.gain.setValueAtTime(0.07, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+          osc.start(now); osc.stop(now + 0.06);
+        } else if (type === 'transmit') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(520, now);
+          osc.frequency.exponentialRampToValueAtTime(1180, now + 0.12);
+          gain.gain.setValueAtTime(0.09, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+          osc.start(now); osc.stop(now + 0.13);
+        } else if (type === 'alert') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(660, now);
+          osc.frequency.setValueAtTime(880, now + 0.12);
+          gain.gain.setValueAtTime(0.09, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now); osc.stop(now + 0.25);
+        }
+      } catch (e) {}
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('hud-toast');
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2400);
+    }
+
+    // -----------------------------------------------------------------------
+    // 2. TAB SWITCHING (SYNCED DESKTOP + MOBILE BOTTOM DOCK)
+    // -----------------------------------------------------------------------
+    function switchTab(tabName) {
+      playHudSound('click');
+      const tabs = ['neural', 'maps', 'daily', 'missions', 'radar', 'command', 'lab', 'archive', 'intel'];
+      tabs.forEach(t => {
+        const view = document.getElementById(`view-${t}`);
+        const btn = document.getElementById(`tab-${t}`);
+        const mobBtn = document.getElementById(`mob-tab-${t}`);
+
+        if (t === tabName) {
+          view.classList.remove('hidden');
+          view.classList.add('flex');
+          if (btn) {
+            btn.classList.add('bg-crimson/20', 'text-white', 'border-crimson/60', 'shadow-[0_0_12px_rgba(255,42,75,0.3)]');
+            btn.classList.remove('text-slate-400', 'border-transparent');
+          }
+          if (mobBtn) {
+            mobBtn.classList.add('text-crimson', 'bg-crimson/15', 'border', 'border-crimson/40');
+            mobBtn.classList.remove('text-slate-400');
+          }
+        } else {
+          view.classList.add('hidden');
+          view.classList.remove('flex');
+          if (btn) {
+            btn.classList.remove('bg-crimson/20', 'text-white', 'border-crimson/60', 'shadow-[0_0_12px_rgba(255,42,75,0.3)]');
+            btn.classList.add('text-slate-400', 'border-transparent');
+          }
+          if (mobBtn) {
+            mobBtn.classList.remove('text-crimson', 'bg-crimson/15', 'border', 'border-crimson/40');
+            mobBtn.classList.add('text-slate-400');
+          }
+        }
+      });
+
+      if (tabName === 'radar') {
+        resizeRadarCanvas();
+        refreshGPS(false);
+      } else if (tabName === 'maps') {
+        refreshGPS(true);
+      }
+    }
+
+    function toggleSFX() {
+      state.sfxEnabled = !state.sfxEnabled;
+      const icon = document.getElementById('icon-sfx');
+      const btn = document.getElementById('btn-sfx-toggle');
+      if (state.sfxEnabled) {
+        playHudSound('click');
+        icon.className = 'fa-solid fa-wave-square';
+        btn.classList.replace('text-slate-500', 'text-cyan');
+        showToast('HUD SFX: ON');
+      } else {
+        icon.className = 'fa-solid fa-volume-off';
+        btn.classList.replace('text-cyan', 'text-slate-500');
+        showToast('HUD SFX: MUTED');
+      }
+    }
+
+    function toggleTTS() {
+      playHudSound('click');
+      state.ttsEnabled = !state.ttsEnabled;
+      const icon = document.getElementById('icon-tts');
+      const btn = document.getElementById('btn-tts-toggle');
+      if (state.ttsEnabled) {
+        icon.className = 'fa-solid fa-volume-high text-crimson';
+        btn.classList.add('border-crimson', 'text-white');
+        speakText('Voice output active, Boss.');
+        showToast('E.V. VOICE: ON');
+      } else {
+        window.speechSynthesis?.cancel();
+        icon.className = 'fa-solid fa-volume-xmark';
+        btn.classList.remove('border-crimson', 'text-white');
+        showToast('E.V. VOICE: OFF');
+      }
+    }
+
+    function speakText(text) {
+      if (!state.ttsEnabled || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const cleanText = text.replace(/[#*`_~>-]/g, '');
+      const u = new SpeechSynthesisUtterance(cleanText);
+      u.rate = 1.06;
+      window.speechSynthesis.speak(u);
+    }
+
+    function openSettings() {
+      playHudSound('click');
+      document.getElementById('custom-api-key').value = state.customApiKey;
+      document.getElementById('custom-home-addr').value = state.homeAddress;
+      document.getElementById('settings-modal').classList.remove('hidden');
+    }
+
+    function closeSettings() {
+      playHudSound('click');
+      document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    function saveSettings() {
+      playHudSound('transmit');
+      state.customApiKey = document.getElementById('custom-api-key').value.trim();
+      state.homeAddress = document.getElementById('custom-home-addr').value.trim() || 'Pimpri-Chinchwad, Pune';
+      localStorage.setItem('ev_custom_api_key', state.customApiKey);
+      localStorage.setItem('ev_home_addr', state.homeAddress);
+      closeSettings();
+      showToast('SETTINGS SAVED');
+    }
+
+    function getActiveApiKey() {
+      return state.customApiKey || defaultApiKey;
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. MULTI-MODEL FAILOVER AI CHAT (NEVER FAILS ON HIGH DEMAND)
+    // -----------------------------------------------------------------------
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function appendMessage(role, text, isLoading = false) {
+      const container = document.getElementById('chat-messages');
+      const wrapper = document.createElement('div');
+      wrapper.className = `flex items-start gap-2.5 ${role === 'user' ? 'flex-row-reverse' : ''}`;
+
+      if (role === 'user') {
+        wrapper.innerHTML = `
+          <div class="w-8 h-8 rounded-lg bg-cyan/20 border border-cyan flex items-center justify-center shrink-0 mt-0.5">
+            <i class="fa-solid fa-user-astronaut text-cyan text-sm"></i>
+          </div>
+          <div class="max-w-[82%] bg-cyan/15 border border-cyan/40 rounded-xl rounded-tr-none p-3 text-sm sm:text-base text-white">
+            <p class="whitespace-pre-wrap">${escapeHtml(text)}</p>
+          </div>
+        `;
+      } else {
+        const msgId = 'ev-msg-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        wrapper.innerHTML = `
+          <div class="w-8 h-8 rounded-lg bg-crimson/20 border border-crimson flex items-center justify-center shrink-0 mt-0.5">
+            <i class="fa-solid fa-spider text-crimson text-sm"></i>
+          </div>
+          <div id="${msgId}" class="flex-1 max-w-[88%] bg-obsidian/90 border border-cyan/25 rounded-xl rounded-tl-none p-3 text-sm sm:text-base leading-relaxed">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-display text-xs font-bold text-crimson tracking-wider">E.V. // AI</span>
+              <span class="font-mono text-[10px] text-cyan/70">${isLoading ? 'ROUTING...' : 'VERIFIED'}</span>
+            </div>
+            <div class="ai-markdown text-slate-200">
+              ${isLoading ? `<span class="font-mono text-xs text-cyan animate-pulse"><i class="fa-solid fa-circle-notch fa-spin mr-1.5"></i>Processing neural link...</span>` : marked.parse(text)}
+            </div>
+          </div>
+        `;
+        container.appendChild(wrapper);
+        container.scrollTop = container.scrollHeight;
+        return msgId;
+      }
+
+      container.appendChild(wrapper);
+      container.scrollTop = container.scrollHeight;
+      return null;
+    }
+
+    function triggerQuickPrompt(promptText) {
+      const input = document.getElementById('chat-input');
+      input.value = promptText;
+      input.focus();
+      if (!promptText.endsWith(': ')) {
+        handleChatSubmit(new Event('submit'));
+      }
+    }
+
+    function clearChat() {
+      playHudSound('click');
+      state.chatHistory = [];
+      document.getElementById('chat-messages').innerHTML = `
+        <div class="flex items-start gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-crimson/20 border border-crimson flex items-center justify-center shrink-0 mt-0.5">
+            <i class="fa-solid fa-spider text-crimson text-sm"></i>
+          </div>
+          <div class="flex-1 bg-obsidian/85 border border-cyan/25 rounded-xl rounded-tl-none p-3 text-sm">
+            <div class="font-display text-xs font-bold text-crimson mb-1">E.V. // AI</div>
+            <p class="text-slate-200">Memory buffer cleared, Boss. Ready for your next directive.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    async function handleChatSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('chat-input');
+      const userText = input.value.trim();
+      if (!userText) return;
+
+      playHudSound('transmit');
+      input.value = '';
+      appendMessage('user', userText);
+      state.chatHistory.push({ role: 'user', parts: [{ text: userText }] });
+
+      const loadingBoxId = appendMessage('ev', '', true);
+      const apiKey = getActiveApiKey();
+      let lastErrorMsg = 'All neural nodes busy.';
+      let succeeded = false;
+
+      // Loop through MODEL_FALLBACK_CHAIN automatically if any model hits 503/429 high demand
+      for (const modelName of MODEL_FALLBACK_CHAIN) {
+        try {
+          const response = await buildGeminiRequest(modelName, {
+            systemInstruction: { parts: [{ text: EV_SYSTEM_PROMPT }] },
+            generationConfig: { temperature: 0.65, maxOutputTokens: 768 },
+            contents: state.chatHistory.slice(-8)
+          }, apiKey);
+
+          const data = await response.json();
+          if (!response.ok) {
+            lastErrorMsg = data.error?.message || `HTTP ${response.status}`;
+            // Retry next model in chain if high demand (503/429/500)
+            if (response.status === 503 || response.status === 429 || response.status === 500 || lastErrorMsg.toLowerCase().includes('demand')) {
+              continue;
+            }
+            break;
+          }
+
+          const aiReply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!aiReply) {
+            lastErrorMsg = 'Empty response from model.';
+            continue;
+          }
+
+          state.chatHistory.push({ role: 'model', parts: [{ text: aiReply }] });
+          document.getElementById('active-model-badge').textContent = `CORE: ${modelName.toUpperCase()}`;
+
+          const box = document.getElementById(loadingBoxId);
+          if (box) {
+            box.querySelector('.font-mono').textContent = modelName.replace('gemini-', '').toUpperCase();
+            box.querySelector('.ai-markdown').innerHTML = marked.parse(aiReply);
+          }
+          const container = document.getElementById('chat-messages');
+          container.scrollTop = container.scrollHeight;
+          speakText(aiReply);
+          succeeded = true;
+          break;
+        } catch (err) {
+          lastErrorMsg = err.message;
+        }
+      }
+
+      if (!succeeded) {
+        playHudSound('alert');
+        const box = document.getElementById(loadingBoxId);
+        if (box) {
+          box.querySelector('.font-mono').textContent = 'LINK ERROR';
+          box.querySelector('.ai-markdown').innerHTML = `
+            <p class="text-crimson font-mono text-xs"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ${escapeHtml(lastErrorMsg)}</p>
+            <p class="text-slate-400 text-xs mt-1">Open the top-right <b>Settings</b> gear icon and verify your Google AI Studio API key.</p>
+          `;
+        }
+      }
+    }
+
+    // Voice Input
+    let recognition = null;
+    let isListening = false;
+    function toggleVoiceInput() {
+      playHudSound('click');
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) { showToast('VOICE INPUT NOT SUPPORTED HERE'); return; }
+      if (isListening && recognition) { recognition.stop(); return; }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.onstart = () => {
+        isListening = true;
+        document.getElementById('btn-mic').classList.add('bg-crimson/25', 'border-crimson', 'text-crimson');
+        document.getElementById('voice-visualizer').classList.remove('hidden');
+        document.getElementById('voice-visualizer').classList.add('flex');
+      };
+      recognition.onresult = (event) => {
+        document.getElementById('chat-input').value = event.results[0][0].transcript;
+        handleChatSubmit(new Event('submit'));
+      };
+      recognition.onend = () => {
+        isListening = false;
+        document.getElementById('btn-mic').classList.remove('bg-crimson/25', 'border-crimson', 'text-crimson');
+        document.getElementById('voice-visualizer').classList.add('hidden');
+        document.getElementById('voice-visualizer').classList.remove('flex');
+      };
+      recognition.start();
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. GOOGLE MAPS: POINT A -> B DROPDOWN AUTOCOMPLETE & 3KM NEARBY RADAR
+    // -----------------------------------------------------------------------
+    let dropdownDebounce = null;
+
+    function getPresetPlaces() {
+      return [
+        {
+          label: 'My Current GPS Location',
+          sub: `${state.coords.lat.toFixed(5)}, ${state.coords.lon.toFixed(5)}`,
+          icon: 'fa-location-crosshairs text-emerald-400',
+          lat: state.coords.lat,
+          lon: state.coords.lon,
+          value: `${state.coords.lat.toFixed(5)}, ${state.coords.lon.toFixed(5)}`
+        },
+        {
+          label: 'Saved Base / Home',
+          sub: state.homeAddress,
+          icon: 'fa-house text-cyan',
+          lat: null,
+          lon: null,
+          value: state.homeAddress
+        },
+        {
+          label: 'The Pavilion Mall, SB Road, Pune',
+          sub: 'Senapati Bapat Rd, Pune',
+          icon: 'fa-bag-shopping text-amber',
+          lat: 18.5342,
+          lon: 73.8299,
+          value: 'The Pavilion Mall, Senapati Bapat Road, Pune'
+        },
+        {
+          label: 'Wakad Phata / Hinjawadi Bridge',
+          sub: 'Pimpri-Chinchwad, Pune',
+          icon: 'fa-road text-cyan',
+          lat: 18.5987,
+          lon: 73.7625,
+          value: 'Wakad Phata, Pune'
+        },
+        {
+          label: 'Pune Junction Railway Station',
+          sub: 'Central Transit Hub, Pune',
+          icon: 'fa-train text-purple-400',
+          lat: 18.5289,
+          lon: 73.8744,
+          value: 'Pune Junction Railway Station'
+        }
+      ];
+    }
+
+    function openPlaceDropdown(which) {
+      const other = which === 'a' ? 'b' : 'a';
+      document.getElementById(`dropdown-${other}`).classList.add('hidden');
+      const dropdown = document.getElementById(`dropdown-${which}`);
+      const currentVal = document.getElementById(`nav-point-${which}`).value.trim();
+
+      if (!currentVal) {
+        renderDropdownItems(which, getPresetPlaces());
+      } else {
+        handlePlaceSearchInput(which, currentVal);
+      }
+      dropdown.classList.remove('hidden');
+    }
+
+    function togglePlaceDropdown(which) {
+      playHudSound('click');
+      const dropdown = document.getElementById(`dropdown-${which}`);
+      if (dropdown.classList.contains('hidden')) {
+        openPlaceDropdown(which);
+      } else {
+        dropdown.classList.add('hidden');
+      }
+    }
+
+    function renderDropdownItems(which, items) {
+      const dropdown = document.getElementById(`dropdown-${which}`);
+      if (!items || items.length === 0) {
+        dropdown.innerHTML = `<div class="p-3 font-mono text-xs text-slate-400">No matching locations found...</div>`;
+        return;
+      }
+      dropdown.innerHTML = items.map((item, idx) => `
+        <button type="button" onclick='selectDropdownPlace("${which}", ${JSON.stringify(item).replace(/'/g, "&#39;")})'
+          class="w-full text-left px-3.5 py-2.5 hover:bg-cyan/15 transition flex items-start gap-2.5">
+          <i class="fa-solid ${item.icon || 'fa-location-dot text-crimson'} mt-1 text-xs shrink-0"></i>
+          <div class="min-w-0 flex-1">
+            <div class="text-xs sm:text-sm font-bold text-white truncate">${escapeHtml(item.label)}</div>
+            <div class="text-[11px] font-mono text-slate-400 truncate">${escapeHtml(item.sub || '')}</div>
+          </div>
+        </button>
+      `).join('');
+    }
+
+    function selectDropdownPlace(which, item) {
+      playHudSound('click');
+      document.getElementById(`nav-point-${which}`).value = item.value;
+      document.getElementById(`dropdown-${which}`).classList.add('hidden');
+      if (which === 'a') {
+        state.originCoords = (item.lat && item.lon) ? { lat: item.lat, lon: item.lon } : null;
+      } else {
+        state.destCoords = (item.lat && item.lon) ? { lat: item.lat, lon: item.lon } : null;
+        plotRoute();
+      }
+    }
+
+    function handlePlaceSearchInput(which, query) {
+      const dropdown = document.getElementById(`dropdown-${which}`);
+      dropdown.classList.remove('hidden');
+      clearTimeout(dropdownDebounce);
+
+      const q = query.trim();
+      if (q.length < 2) {
+        renderDropdownItems(which, getPresetPlaces());
+        return;
+      }
+
+      dropdown.innerHTML = `<div class="p-3 font-mono text-xs text-cyan animate-pulse"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Searching local map grid...</div>`;
+
+      dropdownDebounce = setTimeout(async () => {
+        try {
+          // Bias search tightly around the user's live GPS coordinates (viewbox ~ 25km radius)
+          const delta = 0.25;
+          const viewbox = `${state.coords.lon - delta},${state.coords.lat + delta},${state.coords.lon + delta},${state.coords.lat - delta}`;
+          const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&viewbox=${viewbox}&bounded=0&q=${encodeURIComponent(q)}`;
+          const res = await fetch(url);
+          const results = await res.json();
+
+          const mapped = results.map(r => {
+            const parts = r.display_name.split(',');
+            return {
+              label: parts[0].trim(),
+              sub: parts.slice(1, 4).join(',').trim(),
+              icon: 'fa-location-dot text-crimson',
+              lat: parseFloat(r.lat),
+              lon: parseFloat(r.lon),
+              value: parts.slice(0, 3).join(',').trim()
+            };
+          });
+
+          // Prepend My GPS option for Point A
+          if (which === 'a') {
+            mapped.unshift(getPresetPlaces()[0]);
+          }
+          renderDropdownItems(which, mapped);
+        } catch (err) {
+          renderDropdownItems(which, getPresetPlaces());
+        }
+      }, 320);
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#nav-point-a') && !e.target.closest('#dropdown-a')) {
+        document.getElementById('dropdown-a')?.classList.add('hidden');
+      }
+      if (!e.target.closest('#nav-point-b') && !e.target.closest('#dropdown-b')) {
+        document.getElementById('dropdown-b')?.classList.add('hidden');
+      }
+    });
+
+    function setTravelMode(mode) {
+      playHudSound('click');
+      state.travelMode = mode;
+      document.querySelectorAll('.nav-mode-btn').forEach(btn => {
+        btn.classList.remove('bg-cyan/20', 'border-cyan', 'text-cyan', 'font-bold');
+        btn.classList.add('bg-hudpanel', 'border-cyan/20', 'text-slate-400');
+      });
+      const activeBtn = document.getElementById(`mode-${mode}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-hudpanel', 'border-cyan/20', 'text-slate-400');
+        activeBtn.classList.add('bg-cyan/20', 'border-cyan', 'text-cyan', 'font-bold');
+      }
+      if (document.getElementById('nav-point-b').value.trim()) plotRoute();
+    }
+
+    function centerMapOnMe() {
+      playHudSound('click');
+      refreshGPS(true);
+      const iframe = document.getElementById('gmaps-iframe');
+      iframe.src = `https://maps.google.com/maps?q=${state.coords.lat},${state.coords.lon}&ll=${state.coords.lat},${state.coords.lon}&z=16&output=embed`;
+      document.getElementById('nearby-results-box').classList.add('hidden');
+      document.getElementById('route-telemetry').classList.add('hidden');
+      showToast('LOCKED ON YOUR EXACT GPS');
+    }
+
+    async function geocodePlace(placeStr) {
+      const coordMatch = placeStr.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+      if (coordMatch) return { lat: parseFloat(coordMatch[1]), lon: parseFloat(coordMatch[2]) };
+      const delta = 0.3;
+      const viewbox = `${state.coords.lon - delta},${state.coords.lat + delta},${state.coords.lon + delta},${state.coords.lat - delta}`;
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&viewbox=${viewbox}&q=${encodeURIComponent(placeStr)}`);
+      const data = await res.json();
+      if (data && data[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      return null;
+    }
+
+    async function plotRoute() {
+      const originInput = document.getElementById('nav-point-a').value.trim();
+      const destInput = document.getElementById('nav-point-b').value.trim();
+      if (!destInput) {
+        playHudSound('alert');
+        showToast('SELECT A DESTINATION (POINT B) FIRST');
+        openPlaceDropdown('b');
+        return;
+      }
+
+      playHudSound('transmit');
+      const originStr = originInput || `${state.coords.lat},${state.coords.lon}`;
+      const dirFlag = state.travelMode === 'walking' ? 'w' : 'd';
+
+      const iframe = document.getElementById('gmaps-iframe');
+      iframe.src = `https://maps.google.com/maps?saddr=${encodeURIComponent(originStr)}&daddr=${encodeURIComponent(destInput)}&dirflg=${dirFlag}&output=embed`;
+
+      const gmapsExternalUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destInput)}&travelmode=${state.travelMode}`;
+      document.getElementById('btn-open-gmaps-app').href = gmapsExternalUrl;
+
+      const telemetryBox = document.getElementById('route-telemetry');
+      telemetryBox.classList.remove('hidden');
+      document.getElementById('route-dist').textContent = 'CALC...';
+      document.getElementById('route-eta').textContent = '--';
+
+      try {
+        const startCoords = state.originCoords || (originInput ? await geocodePlace(originInput) : { lat: state.coords.lat, lon: state.coords.lon });
+        const endCoords = state.destCoords || await geocodePlace(destInput);
+
+        if (startCoords && endCoords) {
+          const profile = state.travelMode === 'walking' ? 'foot' : 'driving';
+          const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/${profile}/${startCoords.lon},${startCoords.lat};${endCoords.lon},${endCoords.lat}?overview=false`);
+          const osrmData = await osrmRes.json();
+          if (osrmData.routes && osrmData.routes[0]) {
+            const distKm = (osrmData.routes[0].distance / 1000).toFixed(1);
+            const mins = Math.max(1, Math.round(osrmData.routes[0].duration / 60));
+            const etaText = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`;
+            document.getElementById('route-dist').textContent = `${distKm} KM`;
+            document.getElementById('route-eta').textContent = etaText;
+            return;
+          }
+        }
+        document.getElementById('route-dist').textContent = 'ACTIVE';
+        document.getElementById('route-eta').textContent = state.travelMode.toUpperCase();
+      } catch (e) {
+        document.getElementById('route-dist').textContent = 'ACTIVE';
+        document.getElementById('route-eta').textContent = state.travelMode.toUpperCase();
+      }
+    }
+
+    // Haversine exact distance in meters
+    function calcDistanceMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const p1 = lat1 * Math.PI / 180;
+      const p2 = lat2 * Math.PI / 180;
+      const dp = (lat2 - lat1) * Math.PI / 180;
+      const dl = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    // TRUE NEARBY 3KM SCANNER (Uses OpenStreetMap Overpass API within 3000m radius + exact GPS lock)
+    async function scanNearbyPlaces(amenityTag, label) {
+      playHudSound('transmit');
+      const resultsBox = document.getElementById('nearby-results-box');
+      const activeLabel = document.getElementById('nearby-active-label');
+      activeLabel.textContent = `SCANNING ${label.toUpperCase()} (< 3 KM)`;
+      resultsBox.classList.remove('hidden');
+      resultsBox.innerHTML = `<div class="p-2 font-mono text-xs text-cyan animate-pulse"><i class="fa-solid fa-radar fa-spin mr-1.5"></i>Scanning 3 km radius around your exact coordinates...</div>`;
+
+      // Also update Google Maps iframe anchored tightly on exact lat/lon
+      const iframe = document.getElementById('gmaps-iframe');
+      const qEncoded = encodeURIComponent(amenityTag.replace('_', ' '));
+      iframe.src = `https://maps.google.com/maps?q=${qEncoded}&sll=${state.coords.lat},${state.coords.lon}&ll=${state.coords.lat},${state.coords.lon}&z=15&output=embed`;
+
+      try {
+        const radius = 3000; // strict 3km radius
+        const overpassQuery = `[out:json][timeout:12];(node["amenity"="${amenityTag}"](around:${radius},${state.coords.lat},${state.coords.lon});way["amenity"="${amenityTag}"](around:${radius},${state.coords.lat},${state.coords.lon}););out center 15;`;
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: 'data=' + encodeURIComponent(overpassQuery)
+        });
+        const data = await res.json();
+
+        const places = (data.elements || [])
+          .map(el => {
+            const pLat = el.lat || el.center?.lat;
+            const pLon = el.lon || el.center?.lon;
+            const name = el.tags?.name || el.tags?.['name:en'] || `${label} (Unnamed)`;
+            const distM = (pLat && pLon) ? calcDistanceMeters(state.coords.lat, state.coords.lon, pLat, pLon) : 99999;
+            return { name, lat: pLat, lon: pLon, distM };
+          })
+          .filter(p => p.lat && p.lon && p.distM <= 3500)
+          .sort((a, b) => a.distM - b.distM)
+          .slice(0, 8);
+
+        if (places.length === 0) {
+          resultsBox.innerHTML = `<div class="p-2 font-mono text-xs text-slate-400">No tagged ${label} in OpenStreetMap within 3 km—check the live Google Map below.</div>`;
+          return;
+        }
+
+        resultsBox.innerHTML = places.map(p => {
+          const distStr = p.distM < 1000 ? `${Math.round(p.distM)} m` : `${(p.distM / 1000).toFixed(1)} km`;
+          return `
+            <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-hudpanel border border-cyan/20 hover:border-cyan/50 transition">
+              <div class="min-w-0 flex-1">
+                <div class="text-xs sm:text-sm font-bold text-white truncate">${escapeHtml(p.name)}</div>
+                <div class="font-mono text-[10px] text-emerald-400"><i class="fa-solid fa-location-arrow mr-1"></i>${distStr} away</div>
+              </div>
+              <button onclick="navigateToNearby(${p.lat}, ${p.lon}, '${escapeHtml(p.name).replace(/'/g, "\\'")}')"
+                class="px-2.5 py-1.5 rounded-lg bg-crimson/20 hover:bg-crimson/35 border border-crimson text-crimson font-mono text-[11px] font-bold shrink-0 transition">
+                GO <i class="fa-solid fa-arrow-right ml-0.5"></i>
+              </button>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        resultsBox.innerHTML = `<div class="p-2 font-mono text-xs text-amber">Radar sweep timed out—view nearby pins directly on the map below.</div>`;
+      }
+    }
+
+    function navigateToNearby(lat, lon, name) {
+      playHudSound('click');
+      document.getElementById('nav-point-b').value = `${name} (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+      state.destCoords = { lat, lon };
+      plotRoute();
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. DAILY OPS: HYDRATION, EXPENSE LEDGER & VAULT SCRATCHPAD
+    // -----------------------------------------------------------------------
+    function renderHydration() {
+      document.getElementById('water-ml').textContent = state.waterMl;
+      document.getElementById('caffeine-count').textContent = state.caffeine;
+      const pct = Math.min(100, Math.round((state.waterMl / 2500) * 100));
+      document.getElementById('water-bar').style.width = `${pct}%`;
+    }
+
+    function logIntake(ml, caf) {
+      playHudSound('click');
+      state.waterMl += ml;
+      state.caffeine += caf;
+      localStorage.setItem('ev_water_ml', state.waterMl);
+      localStorage.setItem('ev_caffeine', state.caffeine);
+      renderHydration();
+      showToast(ml > 0 ? `+${ml}ML HYDRATION LOGGED` : '+1 CAFFEINE LOGGED');
+    }
+
+    function resetHydration() {
+      playHudSound('click');
+      state.waterMl = 0;
+      state.caffeine = 0;
+      localStorage.setItem('ev_water_ml', '0');
+      localStorage.setItem('ev_caffeine', '0');
+      renderHydration();
+      showToast('DAILY INTAKE RESET');
+    }
+
+    function renderExpenses() {
+      const list = document.getElementById('expense-list');
+      const total = state.expenses.reduce((sum, item) => sum + item.amount, 0);
+      document.getElementById('expense-total').textContent = total;
+
+      if (state.expenses.length === 0) {
+        list.innerHTML = `<div class="text-slate-500 py-2">No expenses logged today.</div>`;
+        return;
+      }
+      list.innerHTML = state.expenses.map(item => `
+        <div class="flex items-center justify-between bg-obsidian/90 px-2.5 py-1.5 rounded border border-cyan/15">
+          <span class="text-slate-200 truncate">${escapeHtml(item.label)}</span>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-emerald-400 font-bold">₹${item.amount}</span>
+            <button onclick="deleteExpense(${item.id})" class="text-slate-500 hover:text-crimson"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addExpense(e) {
+      e.preventDefault();
+      const label = document.getElementById('exp-label').value.trim();
+      const amount = parseFloat(document.getElementById('exp-amount').value);
+      if (!label || isNaN(amount) || amount <= 0) return;
+
+      playHudSound('click');
+      state.expenses.unshift({ id: Date.now(), label, amount });
+      localStorage.setItem('ev_expenses', JSON.stringify(state.expenses));
+      document.getElementById('exp-label').value = '';
+      document.getElementById('exp-amount').value = '';
+      renderExpenses();
+    }
+
+    function deleteExpense(id) {
+      playHudSound('click');
+      state.expenses = state.expenses.filter(x => x.id !== id);
+      localStorage.setItem('ev_expenses', JSON.stringify(state.expenses));
+      renderExpenses();
+    }
+
+    function saveScratchpad() {
+      const val = document.getElementById('quick-scratchpad').value;
+      localStorage.setItem('ev_scratchpad', val);
+      const badge = document.getElementById('note-saved-badge');
+      badge.textContent = 'SAVING...';
+      setTimeout(() => { badge.textContent = 'SYNCED TO DEVICE'; }, 400);
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. MISSIONS & FOCUS TIMER
+    // -----------------------------------------------------------------------
+    function renderMissions() {
+      const list = document.getElementById('mission-list');
+      const activeCount = state.missions.filter(m => !m.done).length;
+      document.getElementById('mission-count').textContent = `${activeCount} ACTIVE`;
+
+      if (state.missions.length === 0) {
+        list.innerHTML = `<div class="text-center py-6 font-mono text-xs text-slate-500">NO ACTIVE TASKS</div>`;
+        return;
+      }
+
+      list.innerHTML = state.missions.map(m => {
+        const badgeColor = m.threat === 'CRITICAL'
+          ? 'bg-crimson/20 text-crimson border-crimson/40'
+          : m.threat === 'MED'
+            ? 'bg-amber/20 text-amber border-amber/40'
+            : 'bg-cyan/20 text-cyan border-cyan/40';
+        const label = m.threat === 'CRITICAL' ? 'URGENT' : m.threat === 'MED' ? 'PRIORITY' : 'NORMAL';
+
+        return `
+          <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-obsidian/90 border ${m.done ? 'border-slate-800 opacity-60' : 'border-cyan/20'} transition">
+            <button onclick="toggleMission(${m.id})" class="flex items-center gap-2.5 text-left flex-1 min-w-0">
+              <div class="w-5 h-5 rounded border ${m.done ? 'bg-emerald-500 border-emerald-500 text-obsidian' : 'border-cyan/50'} flex items-center justify-center text-xs shrink-0">
+                ${m.done ? '<i class="fa-solid fa-check"></i>' : ''}
+              </div>
+              <span class="text-sm font-medium truncate ${m.done ? 'line-through text-slate-500' : 'text-white'}">${escapeHtml(m.text)}</span>
+            </button>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="px-2 py-0.5 rounded border font-mono text-[10px] ${badgeColor}">${label}</span>
+              <button onclick="deleteMission(${m.id})" class="text-slate-500 hover:text-crimson px-1.5">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      localStorage.setItem('ev_missions', JSON.stringify(state.missions));
+    }
+
+    function addMission(e) {
+      e.preventDefault();
+      const input = document.getElementById('mission-input');
+      const threat = document.getElementById('mission-threat').value;
+      const text = input.value.trim();
+      if (!text) return;
+      playHudSound('click');
+      state.missions.unshift({ id: Date.now(), text, threat, done: false });
+      input.value = '';
+      renderMissions();
+    }
+
+    function toggleMission(id) {
+      playHudSound('click');
+      state.missions = state.missions.map(m => m.id === id ? { ...m, done: !m.done } : m);
+      renderMissions();
+    }
+
+    function deleteMission(id) {
+      playHudSound('click');
+      state.missions = state.missions.filter(m => m.id !== id);
+      renderMissions();
+    }
+
+    let timerSeconds = 25 * 60;
+    let totalTimerSeconds = 25 * 60;
+    let timerInterval = null;
+
+    function setTimerMinutes(mins) {
+      playHudSound('click');
+      clearInterval(timerInterval);
+      timerInterval = null;
+      totalTimerSeconds = mins * 60;
+      timerSeconds = totalTimerSeconds;
+      document.getElementById('btn-timer-toggle').textContent = 'INITIATE';
+      document.getElementById('timer-status').textContent = 'READY';
+      updateTimerUI();
+    }
+
+    function updateTimerUI() {
+      const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+      const secs = (timerSeconds % 60).toString().padStart(2, '0');
+      document.getElementById('timer-display').textContent = `${mins}:${secs}`;
+      const ring = document.getElementById('timer-progress-ring');
+      const circumference = 276.46;
+      ring.style.strokeDashoffset = circumference - (timerSeconds / totalTimerSeconds) * circumference;
+    }
+
+    function toggleTimer() {
+      playHudSound('click');
+      const btn = document.getElementById('btn-timer-toggle');
+      const status = document.getElementById('timer-status');
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        btn.textContent = 'RESUME';
+        status.textContent = 'PAUSED';
+      } else {
+        btn.textContent = 'PAUSE';
+        status.textContent = 'ACTIVE';
+        timerInterval = setInterval(() => {
+          if (timerSeconds > 0) {
+            timerSeconds--;
+            updateTimerUI();
+          } else {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            playHudSound('alert');
+            showToast('FOCUS SESSION COMPLETE');
+            speakText('Focus session complete, Boss.');
+            btn.textContent = 'INITIATE';
+            status.textContent = 'DONE';
+          }
+        }, 1000);
+      }
+    }
+
+    function resetTimer() {
+      playHudSound('click');
+      clearInterval(timerInterval);
+      timerInterval = null;
+      timerSeconds = totalTimerSeconds;
+      document.getElementById('btn-timer-toggle').textContent = 'INITIATE';
+      document.getElementById('timer-status').textContent = 'READY';
+      updateTimerUI();
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. SPIDER-SENSE RADAR, LIVE WEATHER, GPS & EXTRACTION CALL
+    // -----------------------------------------------------------------------
+    let radarAngle = 0;
+    function resizeRadarCanvas() {
+      const canvas = document.getElementById('radar-canvas');
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width || 230;
+      canvas.height = rect.height || 230;
+    }
+
+    function animateRadar() {
+      const canvas = document.getElementById('radar-canvas');
+      if (canvas && !document.getElementById('view-radar').classList.contains('hidden')) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2, r = Math.min(cx, cy) - 6;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#04070e';
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+        ctx.lineWidth = 1;
+        [0.33, 0.66, 1].forEach(s => { ctx.beginPath(); ctx.arc(cx, cy, r * s, 0, Math.PI * 2); ctx.stroke(); });
+        ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(radarAngle);
+        const grad = ctx.createLinearGradient(0, 0, r, 0);
+        grad.addColorStop(0, 'rgba(0, 240, 255, 0.45)');
+        grad.addColorStop(1, 'rgba(255, 42, 75, 0.05)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r, -0.35, 0); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#00f0ff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r, 0); ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = '#ff2a4b';
+        ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, Math.PI * 2); ctx.fill();
+        radarAngle += 0.035;
+      }
+      requestAnimationFrame(animateRadar);
+    }
+
+    async function fetchLocalWeather(lat, lon) {
+      try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+        const data = await res.json();
+        if (data.current_weather) {
+          const temp = Math.round(data.current_weather.temperature);
+          document.getElementById('header-weather').innerHTML = `<i class="fa-solid fa-temperature-half"></i><span>${temp}°C</span>`;
+          const ccTemp=document.getElementById('cc-weather'); if(ccTemp) ccTemp.textContent=`${temp}°`;
+          const ccDesc=document.getElementById('cc-weather-desc'); if(ccDesc) ccDesc.textContent=`Wind ${Math.round(data.current_weather.windspeed||0)} km/h`;
+        }
+      } catch (e) {}
+    }
+
+    function refreshGPS(updateMapIfIdle = false) {
+      const readout = document.getElementById('gps-readout');
+      const status = document.getElementById('gps-status');
+      const mapLabel = document.getElementById('map-sector-label');
+
+      if (!navigator.geolocation) {
+        fetchLocalWeather(state.coords.lat, state.coords.lon);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          state.coords.lat = pos.coords.latitude;
+          state.coords.lon = pos.coords.longitude;
+          state.coords.live = true;
+          const formatted = `${state.coords.lat.toFixed(5)}° N, ${state.coords.lon.toFixed(5)}° E`;
+          if (readout) readout.textContent = formatted;
+          if (status) status.textContent = `HIGH-ACCURACY GPS LOCK (±${Math.round(pos.coords.accuracy)}M)`;
+          if (mapLabel) mapLabel.textContent = `LIVE GPS LOCK: ${formatted}`;
+
+          fetchLocalWeather(state.coords.lat, state.coords.lon);
+
+          if (updateMapIfIdle && !document.getElementById('nav-point-b').value.trim()) {
+            document.getElementById('gmaps-iframe').src = `https://maps.google.com/maps?q=${state.coords.lat},${state.coords.lon}&ll=${state.coords.lat},${state.coords.lon}&z=16&output=embed`;
+          }
+        },
+        () => {
+          const fallback = `${state.coords.lat.toFixed(4)}° N, ${state.coords.lon.toFixed(4)}° E`;
+          if (readout) readout.textContent = fallback;
+          if (status) status.textContent = 'ENABLE LOCATION PERMISSION FOR EXACT STREET LOCK';
+          if (mapLabel) mapLabel.textContent = `SECTOR: ${fallback}`;
+          fetchLocalWeather(state.coords.lat, state.coords.lon);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    function copyCoordinates() {
+      playHudSound('click');
+      const mapsLink = `https://maps.google.com/?q=${state.coords.lat},${state.coords.lon}`;
+      const ta = document.createElement('textarea');
+      ta.value = `LIVE GPS LOCATION: ${mapsLink}`;
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      showToast('GPS LINK COPIED');
+    }
+
+    function shareWhatsAppBeacon() {
+      playHudSound('click');
+      const mapsLink = `https://maps.google.com/?q=${state.coords.lat},${state.coords.lon}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent('My live GPS location: ' + mapsLink)}`, '_blank');
+    }
+
+    // Fake Extraction Call
+    let callSeconds = 0, callInterval = null;
+    function triggerFakeCall() {
+      playHudSound('alert');
+      document.getElementById('fake-call-overlay').classList.remove('hidden');
+      document.getElementById('call-timer-text').textContent = 'INCOMING PRIORITY CALL...';
+      document.getElementById('btn-accept-call').classList.remove('hidden');
+    }
+
+    function acceptFakeCall() {
+      playHudSound('click');
+      document.getElementById('btn-accept-call').classList.add('hidden');
+      callSeconds = 0;
+      document.getElementById('call-timer-text').textContent = '00:00 // CONNECTED';
+      speakText('Hey kid, Stark here. Emergency at the lab—head out right now.');
+      callInterval = setInterval(() => {
+        callSeconds++;
+        const m = Math.floor(callSeconds / 60).toString().padStart(2, '0');
+        const s = (callSeconds % 60).toString().padStart(2, '0');
+        document.getElementById('call-timer-text').textContent = `${m}:${s} // CONNECTED`;
+      }, 1000);
+    }
+
+    function endFakeCall() {
+      playHudSound('click');
+      clearInterval(callInterval); callInterval = null;
+      window.speechSynthesis?.cancel();
+      document.getElementById('fake-call-overlay').classList.add('hidden');
+    }
+
+    function updateLiveClock() {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const dayStr = now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
+      document.getElementById('header-clock').textContent = `${dayStr} // ${timeStr}`;
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. INIT
+    // -----------------------------------------------------------------------
+    window.onload = function () {
+      renderMissions();
+      renderHydration();
+      renderExpenses();
+      updateTimerUI();
+      updateLiveClock();
+    initExtendedEV();
+      setInterval(updateLiveClock, 15000);
+      document.getElementById('quick-scratchpad').value = localStorage.getItem('ev_scratchpad') || '';
+      resizeRadarCanvas();
+      animateRadar();
+      refreshGPS(true);
+      window.addEventListener('resize', resizeRadarCanvas);
+    };
+
+    // ===================== E.V. MK-X EXTENDED SYSTEMS =====================
+    const EV_STORE = {
+      get(key, fallback){ try{return JSON.parse(localStorage.getItem('evx_'+key)) ?? fallback}catch(e){return fallback} },
+      set(key,value){ try{localStorage.setItem('evx_'+key,JSON.stringify(value))}catch(e){showToast('LOCAL STORAGE LIMIT REACHED')} }
+    };
+    let archiveRecords = EV_STORE.get('archive', []);
+    let archiveObjectUrls = [];
+    const periodicElements = [
+      ['H','Hydrogen',1,'1.008','Nonmetal'],['He','Helium',2,'4.003','Noble gas'],['Li','Lithium',3,'6.94','Alkali metal'],['Be','Beryllium',4,'9.012','Alkaline earth'],['B','Boron',5,'10.81','Metalloid'],['C','Carbon',6,'12.011','Nonmetal'],['N','Nitrogen',7,'14.007','Nonmetal'],['O','Oxygen',8,'15.999','Nonmetal'],['F','Fluorine',9,'18.998','Halogen'],['Ne','Neon',10,'20.180','Noble gas'],
+      ['Na','Sodium',11,'22.990','Alkali metal'],['Mg','Magnesium',12,'24.305','Alkaline earth'],['Al','Aluminium',13,'26.982','Post-transition'],['Si','Silicon',14,'28.085','Metalloid'],['P','Phosphorus',15,'30.974','Nonmetal'],['S','Sulfur',16,'32.06','Nonmetal'],['Cl','Chlorine',17,'35.45','Halogen'],['Ar','Argon',18,'39.948','Noble gas'],
+      ['K','Potassium',19,'39.098','Alkali metal'],['Ca','Calcium',20,'40.078','Alkaline earth'],['Fe','Iron',26,'55.845','Transition metal'],['Co','Cobalt',27,'58.933','Transition metal'],['Ni','Nickel',28,'58.693','Transition metal'],['Cu','Copper',29,'63.546','Transition metal'],['Zn','Zinc',30,'65.38','Transition metal'],['Ag','Silver',47,'107.868','Transition metal'],['Sn','Tin',50,'118.710','Post-transition'],['I','Iodine',53,'126.904','Halogen'],['Au','Gold',79,'196.967','Transition metal'],['Hg','Mercury',80,'200.592','Transition metal'],['Pb','Lead',82,'207.2','Post-transition'],['U','Uranium',92,'238.029','Actinide']
+    ];
+    function initExtendedEV(){
+      renderPeriodicTable(); renderArchive(); updateCommandCentre(); tickCommandClock(); setInterval(tickCommandClock,1000);
+      plotFunction(); runPhysicsSim();
+      loadIntel('science',true);
+      const nav=document.querySelector('.sm\\:grid'); if(nav) nav.classList.add('grid-cols-9');
+    }
+    function tickCommandClock(){
+      const now=new Date(), clock=document.getElementById('command-clock'), date=document.getElementById('command-date');
+      if(clock) clock.textContent=now.toLocaleTimeString([], {hour12:false});
+      if(date) date.textContent=now.toLocaleDateString([], {weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+      updateCommandCentre();
+    }
+    function updateCommandCentre(){
+      const open=(state.missions||[]).filter(m=>!m.done);
+      const count=document.getElementById('cc-missions'); if(count) count.textContent=open.length;
+      const files=document.getElementById('cc-files'); if(files) files.textContent=archiveRecords.length;
+      const list=document.getElementById('cc-task-list');
+      if(list) list.innerHTML=open.slice(0,5).map(m=>`<div class="flex items-center gap-2 border-b border-cyan/10 pb-2"><span class="w-1.5 h-1.5 rounded-full ${m.threat==='CRITICAL'?'bg-crimson':'bg-cyan'}"></span><span class="text-slate-300 flex-1">${escapeHtml(m.text)}</span><span class="tiny-label">${m.threat||'TASK'}</span></div>`).join('')||'<p class="text-slate-500 text-sm">No open missions. All clear.</p>';
+    }
+    function generateBriefing(){
+      const tasks=(state.missions||[]).filter(m=>!m.done);
+      const high=tasks.filter(m=>m.threat==='CRITICAL').length;
+      const msg=`E.V. DAILY BRIEFING: ${tasks.length} open mission(s), including ${high} urgent. ${tasks.length?`First priority: ${tasks[0].text}.`: 'Your task board is clear.'} Use the mission panel to set deadlines and focus blocks.`;
+      const el=document.getElementById('cc-briefing'); if(el) el.textContent=msg;
+      if(typeof triggerQuickPrompt==='function'){switchTab('neural');document.getElementById('chat-input').value=`Turn this into a practical daily plan with realistic time blocks: ${msg}`;}
+    }
+    function renderPeriodicTable(){
+      const grid=document.getElementById('periodic-grid'); if(!grid)return;
+      grid.innerHTML=periodicElements.map(e=>`<button title="${e[1]}" onclick="showElement('${e[0]}')" class="rounded-md border border-cyan/20 bg-cyan/5 hover:bg-crimson/20 hover:border-crimson/60 p-1 min-h-10 text-center"><span class="block font-display text-xs text-cyan">${e[0]}</span><span class="block text-[8px] text-slate-500">${e[2]}</span></button>`).join('');
+    }
+    function showElement(symbol){
+      const e=periodicElements.find(x=>x[0]===symbol); if(!e)return;
+      document.getElementById('element-info').innerHTML=`<div class="flex items-center gap-3"><span class="font-display text-3xl text-cyan">${e[0]}</span><div><b class="text-white">${e[1]}</b><div class="tiny-label">ATOMIC NUMBER ${e[2]}</div></div></div><div class="grid grid-cols-2 gap-2 mt-3 text-xs"><div>Atomic mass: <b class="text-cyan">${e[3]} u</b></div><div>Classification: <b class="text-cyan">${e[4]}</b></div></div>`;
+    }
+    function runPhysicsSim(){
+      const v=Number(document.getElementById('sim-velocity').value)||0,a=Number(document.getElementById('sim-accel').value)||0,t=Math.max(0,Number(document.getElementById('sim-time').value)||0),m=Math.max(0,Number(document.getElementById('sim-mass').value)||0);
+      const displacement=v*t+.5*a*t*t, finalV=v+a*t, force=m*a;
+      document.getElementById('sim-result').innerHTML=`<div class="grid grid-cols-2 gap-2"><div><span class="tiny-label">DISPLACEMENT</span><div class="text-cyan font-display">${displacement.toFixed(2)} m</div></div><div><span class="tiny-label">FINAL VELOCITY</span><div class="text-cyan font-display">${finalV.toFixed(2)} m/s</div></div><div><span class="tiny-label">ACCELERATION</span><div class="text-white">${a.toFixed(2)} m/s²</div></div><div><span class="tiny-label">NET FORCE</span><div class="text-white">${force.toFixed(2)} N</div></div></div><p class="text-[10px] text-slate-500 mt-2">Constant-acceleration model: s = ut + ½at², v = u + at, F = ma.</p>`;
+      const c=document.getElementById('sim-canvas'),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle='#00f0ff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(24,125);ctx.lineTo(610,125);ctx.stroke();ctx.fillStyle='#ff2a4b';ctx.beginPath();ctx.arc(30,95,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#ff2a4b';ctx.beginPath();ctx.moveTo(30,95);ctx.quadraticCurveTo(260,95-a*8,Math.min(600,30+Math.abs(displacement)*5),35);ctx.stroke();
+    }
+    function plotFunction(){
+      const c=document.getElementById('function-canvas');if(!c)return;const ctx=c.getContext('2d'),expr=document.getElementById('plot-expression').value.trim();
+      if(!/^[0-9xX+\-*/().,\sA-Za-z]+$/.test(expr)||/window|document|constructor|function|=>/i.test(expr)){showToast('UNSUPPORTED EXPRESSION');return;}
+      const fn=x=>{try{return Function('x',`"use strict"; return (${expr.replace(/\^/g,'**')});`)(x)}catch(e){return NaN}};
+      ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle='rgba(0,240,255,.18)';ctx.lineWidth=1;
+      for(let x=0;x<=c.width;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke()}for(let y=0;y<=c.height;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke()}
+      const X=x=>(x+10)/20*c.width,Y=y=>c.height/2-y*22;ctx.strokeStyle='#00f0ff';ctx.lineWidth=2;ctx.beginPath();let started=false;
+      for(let px=0;px<=c.width;px++){const x=px/c.width*20-10,y=fn(x);if(!Number.isFinite(y)||Math.abs(y)>100){started=false;continue}if(!started){ctx.moveTo(px,Y(y));started=true}else ctx.lineTo(px,Y(y))}ctx.stroke();ctx.fillStyle='#ff2a4b';ctx.font='12px monospace';ctx.fillText('y = '+expr,12,18);
+    }
+    function planetInfo(name,description){const el=document.getElementById('planet-readout');if(el)el.textContent=`${name.toUpperCase()} // ${description}`}
+    async function attachToChat(input){
+      const f=input.files?.[0];if(!f)return;
+      try{let content='';if(f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf')){content=await extractPdfText(f);await ingestArchiveFiles([new File([content],f.name.replace(/\\.pdf$/i,'.txt'),{type:'text/plain'})]);}else content=await f.text();
+        pendingChatAttachment=`FILE: ${f.name}\n${content.slice(0,18000)}`;
+        document.getElementById('chat-attachment-name').textContent=f.name+' READY';showToast('FILE CONTEXT READY');
+      }catch(e){showToast('FILE COULD NOT BE READ')}input.value='';
+    }
+    async function extractPdfText(file){
+      if(!window.pdfjsLib) throw new Error('PDF engine unavailable');
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+      let textContent='';
+      for(let pageNo=1;pageNo<=Math.min(pdf.numPages,40);pageNo++){
+        const page=await pdf.getPage(pageNo),content=await page.getTextContent();
+        textContent+=`\\n[PAGE ${pageNo}]\\n`+content.items.map(item=>item.str).join(' ');
+        if(textContent.length>48000)break;
+      }
+      return textContent.trim()||'No selectable text found in this PDF (it may be a scanned image).';
+    }
+    async function ingestArchiveFiles(files){
+      for(const f of files){try{const content=f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf')?await extractPdfText(f):await f.text();
+        archiveRecords.unshift({id:Date.now()+Math.random(),name:f.name,type:f.type||'file',size:f.size,content:content.slice(0,50000),date:new Date().toISOString()});
+      }catch(e){console.warn(e);showToast(`COULD NOT EXTRACT ${f.name}`)}}
+      EV_STORE.set('archive',archiveRecords);renderArchive();updateCommandCentre();showToast('ARCHIVE INGEST COMPLETE');
+    }
+    function saveArchiveNote(){
+      const title=document.getElementById('archive-note-title').value.trim()||'Untitled note',content=document.getElementById('archive-note').value.trim();if(!content){showToast('NOTE IS EMPTY');return}
+      archiveRecords.unshift({id:Date.now(),name:title,type:'note',size:content.length,content,date:new Date().toISOString()});EV_STORE.set('archive',archiveRecords);
+      document.getElementById('archive-note').value='';document.getElementById('archive-note-title').value='';renderArchive();updateCommandCentre();showToast('NOTE STORED LOCALLY');
+    }
+    function renderArchive(){
+      const el=document.getElementById('archive-list');if(!el)return;const q=(document.getElementById('archive-search')?.value||'').toLowerCase();
+      const records=archiveRecords.filter(r=>(r.name+' '+r.content).toLowerCase().includes(q));
+      el.innerHTML=records.map(r=>`<article class="archive-item"><div class="flex justify-between gap-2"><div class="min-w-0"><div class="font-display text-xs text-cyan truncate">${escapeHtml(r.name)}</div><div class="tiny-label mt-1">${r.type} // ${new Date(r.date).toLocaleDateString()}</div></div><button class="text-crimson" onclick="deleteArchiveItem('${r.id}')"><i class="fa-solid fa-trash"></i></button></div><p class="text-xs text-slate-400 mt-2 line-clamp-3">${escapeHtml((r.content||'').slice(0,220))}</p><div class="flex gap-2 mt-3"><button class="hud-action py-1" onclick="sendArchiveToAI('${r.id}')">ASK E.V.</button><button class="hud-action py-1" onclick="copyArchiveItem('${r.id}')">COPY</button></div></article>`).join('')||'<p class="text-sm text-slate-500">No matching records in the archive.</p>';
+    }
+    function deleteArchiveItem(id){archiveRecords=archiveRecords.filter(r=>String(r.id)!==String(id));EV_STORE.set('archive',archiveRecords);renderArchive();updateCommandCentre()}
+    function sendArchiveToAI(id){const r=archiveRecords.find(x=>String(x.id)===String(id));if(!r)return;switchTab('neural');document.getElementById('chat-input').value=`Analyze this archived material titled "${r.name}":\n${r.content.slice(0,14000)}`;document.getElementById('chat-input').focus()}
+    function copyArchiveItem(id){const r=archiveRecords.find(x=>String(x.id)===String(id));if(r)navigator.clipboard?.writeText(r.content).then(()=>showToast('COPIED TO CLIPBOARD')).catch(()=>showToast('COPY UNAVAILABLE'))}
+    async function loadIntel(channel='science',silent=false){
+      const feed=document.getElementById('intel-feed'),status=document.getElementById('intel-status');if(!feed)return;
+      if(!silent)status.textContent='CONNECTING TO PUBLIC SIGNAL FEEDS...';
+      const sources={science:'https://feeds.arstechnica.com/arstechnica/science',space:'https://www.nasa.gov/feed/',world:'https://feeds.bbci.co.uk/news/world/rss.xml'};
+      try{
+        const proxy='https://api.rss2json.com/v1/api.json?rss_url='+encodeURIComponent(sources[channel]||sources.science);
+        const res=await fetch(proxy,{signal:AbortSignal.timeout(9000)}),data=await res.json();
+        if(!data.items?.length)throw new Error('No feed items');
+        status.textContent=`${channel.toUpperCase()} SIGNAL // ${data.items.length} HEADLINES`;
+        feed.innerHTML=data.items.slice(0,8).map(item=>`<article class="hud-box rounded-xl p-3"><div class="tiny-label">${escapeHtml(item.author||channel.toUpperCase())}</div><h3 class="font-display text-xs text-white mt-2 leading-relaxed">${escapeHtml(item.title||'Untitled')}</h3><p class="text-xs text-slate-400 mt-2">${new Date(item.pubDate).toLocaleString()}</p><a class="text-cyan text-xs font-mono inline-block mt-3 hover:underline" target="_blank" rel="noopener" href="${escapeHtml(item.link)}">OPEN SOURCE ↗</a></article>`).join('');
+      }catch(e){status.textContent='SIGNAL FEED UNAVAILABLE // TRY REFRESH';feed.innerHTML='<div class="hud-box rounded-xl p-4 text-sm text-slate-400">The public RSS bridge did not respond. Try again later or open the publisher directly. No placeholder headlines are shown.</div>'}
+    }
+
+  </script>
+</body>
+</html>
